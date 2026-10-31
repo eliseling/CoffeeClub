@@ -58,9 +58,9 @@ export function createJournalApi({ url, key, allowLocal = true, clientFactory = 
     }
     if (!['POST', 'PUT'].includes(method) || (method === 'PUT' && (!id || kind === 'ratings')) || (method === 'POST' && id)) throw new Error('Invalid journal request.');
     const value = JSON.parse(options.body);
-    const row = Object.fromEntries(fields[kind].map(field => [field, value[field] ?? '']));
+    const row = Object.fromEntries(fields[kind].map(field => [field, typeof value[field] === 'string' ? value[field].trim() : value[field] ?? '']));
     if (kind === 'coffees') row.date = row.date || null;
-    if (kind === 'ratings') { row.name = row.name.trim(); row.coffee_id = value.coffeeId; }
+    if (kind === 'ratings') row.coffee_id = value.coffeeId;
     const table = client.from(kind);
     const query = kind === 'ratings' ? table.upsert(row, { onConflict: 'coffee_id,member' }) : method === 'PUT' ? table.update(row).eq('id', id) : table.insert(row);
     return resultOf(query.select('*').single(), kind);

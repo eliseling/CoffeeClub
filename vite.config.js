@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
     base: env.VITE_BASE_PATH || '/',
     server: {
       port: 5173,
-      proxy: { '/api': 'http://127.0.0.1:3001' },
+      proxy: { '/api': `http://127.0.0.1:${Number(process.env.PORT) || 3001}` },
     },
   };
 });
