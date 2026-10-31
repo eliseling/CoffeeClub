@@ -32,5 +32,13 @@ app.use((error, request, response, next) => {
 });
 app.use(express.static(resolve(root, 'dist')));
 app.get('/{*path}', (request, response) => response.sendFile(resolve(root, 'dist/index.html')));
-const server = app.listen(Number(process.env.PORT) || 3001, '0.0.0.0', () => console.log(`Coffee Club server: http://localhost:${server.address().port}`));
+const port = Number(process.env.PORT) || 3001;
+const server = app.listen(port, '0.0.0.0', error => {
+  if (error) {
+    console.error(error.code === 'EADDRINUSE' ? `Port ${port} is already in use. Stop the other Coffee Club server or set PORT to a free port.` : error.message);
+    store.close();
+    process.exit(1);
+  }
+  console.log(`Coffee Club server: http://localhost:${port}`);
+});
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => { store.close(); process.exit(0); }));

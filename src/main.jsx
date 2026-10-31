@@ -42,7 +42,11 @@ function Empty({ title, children, onAdd, label }) {
 }
 function Modal({ children, title, onClose, wide = false }) {
   const ref = useRef(null);
-  useEffect(() => { ref.current.showModal(); }, []);
+  useEffect(() => {
+    // autoFocus runs while the dialog is still hidden, and showModal() then focuses the Close button.
+    ref.current.showModal();
+    ref.current.querySelector('input, select, textarea')?.focus();
+  }, []);
   return <dialog ref={ref} className={wide ? 'modal wide' : 'modal'} onCancel={onClose} onClick={event => { if (event.target === ref.current) onClose(); }} aria-label={title}>
     <div className="modal-head"><h2>{title}</h2><button className="icon-button" onClick={onClose} aria-label="Close dialog" title="Close"><X size={21} /></button></div>{children}
   </dialog>;
@@ -76,7 +80,7 @@ function EntryForm({ kind, entry, onSave, onClose }) {
   </Modal>;
 }
 function RateForm({ coffee, ratings, onSave, onClose }) {
-  const [name, setName] = useState(localStorage.getItem('coffee-club-name') || '');
+  const [name, setName] = useState(() => { try { return localStorage.getItem('coffee-club-name') || ''; } catch { return ''; } });
   const existing = ratings.find(rating => rating.name.toLowerCase() === name.trim().toLowerCase());
   const [scores, setScores] = useState(existing || { overall: 3, aroma: 3, flavor: 3, body: 3 });
   const [notes, setNotes] = useState(existing?.notes || '');
@@ -91,7 +95,7 @@ function RateForm({ coffee, ratings, onSave, onClose }) {
     event.preventDefault(); setBusy(true); setError('');
     try {
       await onSave('ratings', { ...scores, name, notes, coffeeId: coffee.id });
-      localStorage.setItem('coffee-club-name', name.trim());
+      try { localStorage.setItem('coffee-club-name', name.trim()); } catch { /* Name memory is optional. */ }
     } catch (failure) { setError(failure.message); setBusy(false); }
   }
   return <Modal title="Rate coffee" onClose={onClose}><form onSubmit={submit} className="entry-form">
@@ -125,7 +129,7 @@ function Insights({ coffees, ratings }) {
   const ranked = coffees.map(coffee => ({ ...coffee, score: average(ratings.filter(rating => rating.coffeeId === coffee.id)), count: ratings.filter(rating => rating.coffeeId === coffee.id).length })).filter(coffee => coffee.score).sort((first, second) => second.score - first.score);
   if (!ranked.length) return <Empty title="No ratings yet">No rating data is available.</Empty>;
   const dimensions = ['aroma', 'flavor', 'body'];
-  return <div className="insights-layout"><section className="ranking-section"><div className="section-heading"><h2>Coffee ranking</h2><Star size={22} /></div><div className="ranking-chart" role="img" aria-label={`Coffee ranking: ${ranked.map(coffee => `${coffee.name}, ${coffee.score.toFixed(1)} out of 5`).join('; ')}`}>{ranked.map((coffee, index) => <div className="ranking-row" key={coffee.id}><span className="rank-number">{String(index + 1).padStart(2, '0')}</span><div><div className="ranking-label"><strong>{coffee.name}</strong><span>{coffee.score.toFixed(1)} <Star size={12} /></span></div><div className="bar-track"><div className={`bar-fill bar-${index % 3}`} style={{ width: `${coffee.score / 5 * 100}%` }} /></div><small>{coffee.method} · {coffee.count} {coffee.count === 1 ? 'rating' : 'ratings'}</small></div></div>)}</div></section><section className="profile-section"><h2>Average scores</h2><p className="muted">All ratings</p>{dimensions.map(dimension => { const score = average(ratings, dimension); return <div className="dimension-row" key={dimension}><div><span>{dimension}</span><strong>{score.toFixed(1)}<small> / 5</small></strong></div><div className="bar-track"><div className="bar-fill sage" style={{ width: `${score / 5 * 100}%` }} /></div></div>; })}<div className="profile-note"><Coffee size={25} strokeWidth={1.5} /><p>{ranked[0].name}<small>Highest-rated coffee</small></p></div></section></div>;
+  return <div className="insights-layout"><section className="ranking-section"><div className="section-heading"><h2>Coffee ranking</h2><Star size={22} /></div><div className="ranking-chart" role="img" aria-label={`Coffee ranking: ${ranked.map(coffee => `${coffee.name}, ${coffee.score.toFixed(1)} out of 5`).join('; ')}`}>{ranked.map((coffee, index) => <div className="ranking-row" key={coffee.id}><span className="rank-number">{String(index + 1).padStart(2, '0')}</span><div><div className="ranking-label"><strong>{coffee.name}</strong><span>{coffee.score.toFixed(1)} <Star size={12} /></span></div><div className="bar-track"><div className={`bar-fill bar-${index % 3}`} style={{ width: `${coffee.score / 5 * 100}%` }} /></div><small>{coffee.method === 'Not recorded' ? '' : `${coffee.method} · `}{coffee.count} {coffee.count === 1 ? 'rating' : 'ratings'}</small></div></div>)}</div></section><section className="profile-section"><h2>Average scores</h2><p className="muted">All ratings</p>{dimensions.map(dimension => { const score = average(ratings, dimension); return <div className="dimension-row" key={dimension}><div><span>{dimension}</span><strong>{score.toFixed(1)}<small> / 5</small></strong></div><div className="bar-track"><div className="bar-fill sage" style={{ width: `${score / 5 * 100}%` }} /></div></div>; })}<div className="profile-note"><Coffee size={25} strokeWidth={1.5} /><p>{ranked[0].name}<small>Highest-rated coffee</small></p></div></section></div>;
 }
 
 function App() {
@@ -147,7 +151,14 @@ function App() {
   async function load() {
     try { setJournal(await api('journal')); setLoadError(''); } catch (error) { setLoadError(error.message); } finally { setLoading(false); }
   }
-  useEffect(() => { load(); const interval = setInterval(load, 15000); return () => clearInterval(interval); }, []);
+  useEffect(() => {
+    // Only poll while the tab is visible so idle tabs don't use up the database's free bandwidth.
+    const refresh = () => { if (document.visibilityState === 'visible') load(); };
+    load();
+    const interval = setInterval(refresh, 15000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', refresh); };
+  }, []);
   useEffect(() => { if (toast) { const timeout = setTimeout(() => setToast(''), 4000); return () => clearTimeout(timeout); } }, [toast]);
   async function save(kind, values, id) {
     await api(`${kind}${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', body: JSON.stringify(values) });

@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The API runs on port 3001. Vite automatically uses the next available frontend port if 5173 is occupied. Without cloud configuration, entries are saved to the local SQLite database.
+Open http://localhost:5173. The API runs on port 3001; set `PORT` (for example `PORT=3002 npm run dev`) if that port is taken. Vite automatically uses the next available frontend port if 5173 is occupied. Without cloud configuration, entries are saved to the local SQLite database.
 
 The club starts with **Korean coffee**, **Brazilian coffee**, and **Iced Biscoff spread coffee**. These are real, unrated entries, not examples. Unspecified dates, roast levels, origins, and brewing methods are left unrecorded. You can edit the details and add recipes as you go. The entries are initialized once; deleting one will not bring it back after a restart.
 
@@ -58,9 +58,9 @@ Open http://localhost:3001. `PORT` sets the production port. `COFFEE_DB` sets th
 - One rating per member name per coffee. Names are case-insensitive; saving again updates that member's rating. Only the last-used name is remembered in browser local storage.
 - Overall, aroma, flavor, and body scores range from 1 to 5. Insights rank coffees by average overall score.
 - Only saved coffees and recipes are displayed. Statistics only count saved entries.
-- Use **Export club journal** to download a JSON snapshot from whichever database the app is connected to. To back up and restore the local database itself, stop the server and copy/restore `data/coffee-club.sqlite`. For the cloud database, use Supabase's backup/export tools. JSON exports are for archival use; there is no in-app import.
+- Use **Export journal** to download a JSON snapshot from whichever database the app is connected to. To back up and restore the local database itself, stop the server and copy/restore `data/coffee-club.sqlite`. For the cloud database, use Supabase's backup/export tools. JSON exports are for archival use; there is no in-app import.
 - Deleting a coffee also deletes its ratings, after confirmation.
-- Shared entries refresh every 15 seconds. Coffee photography and fonts use Unsplash and Google Fonts; data storage does not rely on those services.
+- Shared entries refresh every 15 seconds while the page is open in a visible tab, and immediately when you return to it. Coffee photography and fonts use Unsplash and Google Fonts; data storage does not rely on those services.
 
 ## Verify
 
