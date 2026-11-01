@@ -3,13 +3,17 @@ import { createClient } from '@supabase/supabase-js';
 const fields = {
   coffees: ['name', 'method', 'notes', 'roaster', 'origin', 'roast', 'date', 'tags'],
   recipes: ['name', 'method', 'notes', 'author', 'ingredients', 'steps', 'time'],
-  ratings: ['name', 'notes', 'overall', 'aroma', 'flavor', 'body'],
+  ratings: ['name', 'notes', 'overall', 'taste', 'wouldDrinkAgain', 'aroma'],
 };
 
 function entryFromRow(kind, row) {
-  const { updated_at, coffee_id, member, ...entry } = row;
+  const { updated_at, coffee_id, member, would_drink_again, ...entry } = row;
   if (kind === 'coffees') entry.date = entry.date || '';
-  if (kind === 'ratings') entry.coffeeId = coffee_id;
+  if (kind === 'ratings') {
+    if ('flavor' in row || 'body' in row) throw new Error('Update your Supabase database by running 002_ten_point_ratings.sql before using ten-point ratings.');
+    entry.coffeeId = coffee_id;
+    entry.wouldDrinkAgain = would_drink_again;
+  }
   return { ...entry, updatedAt: updated_at };
 }
 
@@ -60,7 +64,11 @@ export function createJournalApi({ url, key, allowLocal = true, clientFactory = 
     const value = JSON.parse(options.body);
     const row = Object.fromEntries(fields[kind].map(field => [field, typeof value[field] === 'string' ? value[field].trim() : value[field] ?? '']));
     if (kind === 'coffees') row.date = row.date || null;
-    if (kind === 'ratings') row.coffee_id = value.coffeeId;
+    if (kind === 'ratings') {
+      row.coffee_id = value.coffeeId;
+      row.would_drink_again = row.wouldDrinkAgain;
+      delete row.wouldDrinkAgain;
+    }
     const table = client.from(kind);
     const query = kind === 'ratings' ? table.upsert(row, { onConflict: 'coffee_id,member' }) : method === 'PUT' ? table.update(row).eq('id', id) : table.insert(row);
     return resultOf(query.select('*').single(), kind);

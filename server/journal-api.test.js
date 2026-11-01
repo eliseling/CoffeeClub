@@ -36,6 +36,38 @@ test('Supabase migration supports shared writes, rating uniqueness, validation, 
   } finally { await db.close(); }
 });
 
+test('ten-point Supabase migration preserves old ratings and enforces new criteria for shared visitors', async () => {
+  const db = new PGlite();
+  const initial = readFileSync(new URL('../supabase/migrations/001_shared_journal.sql', import.meta.url), 'utf8');
+  const upgrade = readFileSync(new URL('../supabase/migrations/002_ten_point_ratings.sql', import.meta.url), 'utf8');
+  try {
+    await db.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
+    await db.exec(initial);
+    await db.query("INSERT INTO public.ratings (coffee_id, name, overall, aroma, flavor, body, notes) VALUES ('club-korean-coffee', 'Alex', 4, 5, 3, 2, 'Original notes')");
+    await db.exec(upgrade);
+    await db.exec(upgrade);
+    await db.exec('SET ROLE anon;');
+    const saved = (await db.query('SELECT * FROM public.ratings')).rows[0];
+    assert.equal(saved.overall, 8);
+    assert.equal(saved.aroma, 10);
+    assert.equal(saved.taste, 6);
+    assert.equal(saved.would_drink_again, 5);
+    assert.equal(saved.body, undefined);
+    assert.equal(saved.notes, 'Original notes');
+    await db.query("INSERT INTO public.ratings (coffee_id, name, overall, taste, would_drink_again, aroma) VALUES ('club-korean-coffee', ' alex ', 10, 1, 10, 5) ON CONFLICT (coffee_id, member) DO UPDATE SET overall = excluded.overall, taste = excluded.taste, would_drink_again = excluded.would_drink_again, aroma = excluded.aroma");
+    assert.equal((await db.query('SELECT * FROM public.ratings')).rows.length, 1);
+    for (const column of ['overall', 'taste', 'would_drink_again', 'aroma']) {
+      for (const value of [0, 11]) await assert.rejects(db.query(`UPDATE public.ratings SET ${column} = ${value}`));
+    }
+    await db.query("INSERT INTO public.ratings (coffee_id, name) VALUES ('club-brazilian-coffee', 'Sam')");
+    const neutral = (await db.query("SELECT * FROM public.ratings WHERE name = 'Sam'")).rows[0];
+    assert.equal(neutral.overall, 5);
+    assert.equal(neutral.taste, 5);
+    assert.equal(neutral.would_drink_again, 5);
+    assert.equal(neutral.aroma, 5);
+  } finally { await db.close(); }
+});
+
 function cloudStub(rows) {
   const calls = [];
   const client = {
@@ -57,20 +89,25 @@ function cloudStub(rows) {
 }
 
 test('cloud journal maps persisted database rows into the existing UI contract', async () => {
-  const { api } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee', date: null, updated_at: 'today' }], recipes: [], ratings: [{ id: 'rating', coffee_id: 'coffee', member: 'alex', name: 'Alex', overall: 4, updated_at: 'today' }] });
+  const { api } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee', date: null, updated_at: 'today' }], recipes: [], ratings: [{ id: 'rating', coffee_id: 'coffee', member: 'alex', name: 'Alex', overall: 8, taste: 9, would_drink_again: 10, aroma: 5, updated_at: 'today' }] });
   const journal = await api('journal');
   assert.equal(journal.coffees[0].date, '');
   assert.equal(journal.coffees[0].updatedAt, 'today');
   assert.equal(journal.ratings[0].coffeeId, 'coffee');
   assert.equal(journal.ratings[0].member, undefined);
+  assert.equal(journal.ratings[0].wouldDrinkAgain, 10);
+  assert.equal(journal.ratings[0].taste, 9);
 });
 test('cloud writes keep rating uniqueness and support updates, optional dates, and deletion', async () => {
   const { api, calls } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee', date: null }], recipes: [{ id: 'recipe' }], ratings: [{ id: 'rating', coffee_id: 'coffee' }] });
-  await api('ratings', { method: 'POST', body: JSON.stringify({ coffeeId: 'coffee', name: ' Alex ', overall: 4, aroma: 3, flavor: 4, body: 3, id: 'ignored' }) });
+  await api('ratings', { method: 'POST', body: JSON.stringify({ coffeeId: 'coffee', name: ' Alex ', overall: 8, aroma: 5, taste: 10, wouldDrinkAgain: 1, id: 'ignored' }) });
   const upsert = calls.find(call => call[0] === 'upsert');
   assert.equal(upsert[2].name, 'Alex');
   assert.equal(upsert[2].coffee_id, 'coffee');
   assert.equal(upsert[2].id, undefined);
+  assert.equal(upsert[2].would_drink_again, 1);
+  assert.equal(upsert[2].wouldDrinkAgain, undefined);
+  assert.equal(upsert[2].taste, 10);
   assert.deepEqual(upsert[3], { onConflict: 'coffee_id,member' });
   await api('coffees/coffee', { method: 'PUT', body: JSON.stringify({ name: 'Korean coffee', method: 'Not recorded', roast: 'Not recorded', date: '' }) });
   assert.equal(calls.find(call => call[0] === 'update')[2].date, null);

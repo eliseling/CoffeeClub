@@ -17,8 +17,8 @@ export function validate(kind, input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid entry.');
   if (kind === 'ratings') {
     const result = { coffeeId: text(input.coffeeId, 'coffee', true, 100), name: text(input.name, 'name', true, 80), notes: text(input.notes ?? '', 'notes') };
-    for (const dimension of ['overall', 'aroma', 'flavor', 'body']) {
-      if (!Number.isInteger(input[dimension]) || input[dimension] < 1 || input[dimension] > 5) throw new Error('Ratings must be between 1 and 5.');
+    for (const dimension of ['overall', 'taste', 'wouldDrinkAgain', 'aroma']) {
+      if (!Number.isInteger(input[dimension]) || input[dimension] < 1 || input[dimension] > 10) throw new Error('Ratings must be between 1 and 10.');
       result[dimension] = input[dimension];
     }
     return result;
@@ -53,6 +53,18 @@ export function createStore(filename, { seed = false } = {}) {
     CREATE TABLE IF NOT EXISTS recipes (id TEXT PRIMARY KEY, payload TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS ratings (id TEXT PRIMARY KEY, coffeeId TEXT NOT NULL REFERENCES coffees(id) ON DELETE CASCADE, member TEXT NOT NULL, payload TEXT NOT NULL, UNIQUE(coffeeId, member));
     CREATE TABLE IF NOT EXISTS migrations (id TEXT PRIMARY KEY);`);
+  if (!db.prepare('SELECT id FROM migrations WHERE id = ?').get('ratings-ten-point')) {
+    db.exec('BEGIN');
+    try {
+      const update = db.prepare('UPDATE ratings SET payload = ? WHERE id = ?');
+      for (const row of db.prepare('SELECT id, payload FROM ratings').all()) {
+        const { flavor, body, ...rating } = JSON.parse(row.payload);
+        if (flavor !== undefined) update.run(JSON.stringify({ ...rating, overall: rating.overall * 2, aroma: rating.aroma * 2, taste: flavor * 2, wouldDrinkAgain: 5 }), row.id);
+      }
+      db.prepare('INSERT INTO migrations (id) VALUES (?)').run('ratings-ten-point');
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+  }
   if (seed && !db.prepare('SELECT id FROM migrations WHERE id = ?').get('club-first-tastings')) {
     db.exec('BEGIN');
     try {
