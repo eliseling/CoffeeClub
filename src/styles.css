@@ -153,17 +153,19 @@ input::placeholder, textarea::placeholder { color: #b0a394; }
 .form-error { font-size: 12px; color: #b2563d; margin-top: 16px; }
 .rate-coffee-name { font-family: 'Lora', serif; font-size: 19px; margin-bottom: 22px; }
 .rate-coffee-name span { display: block; font-family: 'DM Sans', sans-serif; color: #9b8670; font-size: 10px; margin-top: 6px; }
-.overall-rating { display: flex; flex-direction: column; align-items: center; padding: 26px 0; margin: 21px 0; border-block: 1px solid var(--line); }
+.overall-rating { padding: 26px 0; margin: 21px 0; border-block: 1px solid var(--line); }
+.overall-rating .rating-sliders { margin-bottom: 12px; }
+.overall-rating > small { display: block; text-align: right; }
 .overall-rating > span { font-size: 11px; color: #8c785f; }
 .star-picker { display: flex; gap: 9px; margin: 14px 0 8px; }
 .star-picker button { padding: 3px; color: #dcd0bf; border-radius: 4px; }
 .star-picker button:hover { background: #f3ece0; }
 .overall-rating small { color: #a89172; font-size: 10px; }
 .rating-sliders { display: grid; gap: 19px; margin: 0 0 27px; }
-.rating-sliders label { display: flex; align-items: center; gap: 20px; }
-.rating-sliders label > span { text-transform: capitalize; width: 43px; font-size: 11px; color: #8d775c; }
-.rating-sliders input { min-width: 0; flex: 1; accent-color: #9e8056; cursor: pointer; }
-.rating-sliders output { font-size: 12px; color: #7d6549; min-width: 35px; }
+.rating-sliders label { display: grid; grid-template-columns: 108px minmax(0, 1fr) 48px; align-items: center; gap: 12px; }
+.rating-sliders label > span { font-size: 11px; color: #8d775c; }
+.rating-sliders input { min-width: 0; width: 100%; margin: 0; accent-color: #9e8056; cursor: pointer; }
+.rating-sliders output { font-size: 12px; color: #7d6549; text-align: right; white-space: nowrap; }
 .rating-sliders output small { color: #b9a78e; font-size: 10px; }
 .inline-note { padding: 10px 12px; background: #edf0e7; color: #7e896f; border-radius: 4px; font-size: 10px; margin-top: 12px; line-height: 1.7; }
 .detail-visual { height: 200px; position: relative; }

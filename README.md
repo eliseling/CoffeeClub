@@ -20,7 +20,7 @@ The club starts with **Korean coffee**, **Brazilian coffee**, and **Iced Biscoff
 GitHub Pages only hosts static files. It cannot run the SQLite/Express server or save changes back into your repository. The app therefore uses **Supabase PostgreSQL** for shared storage when published. Everyone using the site connects to the same cloud journal; your laptop does not need to stay running. Creating a GitHub Pages URL alone is not enough: complete the database setup below first.
 
 1. Create a project at https://supabase.com/dashboard. Use a dedicated project for this club.
-2. Open its **SQL Editor** and run [the database setup](supabase/migrations/001_shared_journal.sql). This creates the journal tables, validates inputs, enables shared access, and adds the three coffees without invented ratings or recipes.
+2. Open its **SQL Editor** and run [the database setup](supabase/migrations/001_shared_journal.sql), then [the ten-point rating update](supabase/migrations/002_ten_point_ratings.sql). This creates the journal tables, validates inputs, enables shared access, and adds the three coffees without invented ratings or recipes.
 3. In the Supabase **Connect** dialog or **Settings > API Keys**, find the project URL and the **publishable key** (`sb_publishable_...`). Never use a secret key or the legacy `service_role` key in this app. Publishable keys are intentionally visible to browsers; they are not member passwords.
 4. In your GitHub repository, open **Settings > Secrets and variables > Actions** and create two repository secrets: `VITE_SUPABASE_URL` with the project URL, and `VITE_SUPABASE_PUBLISHABLE_KEY` with the publishable key. Enter them directly in GitHub, not in chat or source code.
 5. Open **Settings > Pages** and select **GitHub Actions** as the source, not **Deploy from a branch**.
@@ -56,13 +56,15 @@ Open http://localhost:3001. `PORT` sets the production port. `COFFEE_DB` sets th
 
 - Coffees, recipes, and individual ratings are stored in SQLite locally or in Supabase when cloud-configured, never just in a browser. Data survives refreshes; local entries survive server restarts and cloud entries survive website redeployments.
 - One rating per member name per coffee. Names are case-insensitive; saving again updates that member's rating. Only the last-used name is remembered in browser local storage.
-- Overall, aroma, flavor, and body scores range from 1 to 5. Insights rank coffees by average overall score.
+- Overall, Taste, Would drink again, and Aroma scores range from 1 to 10, with a default/neutral score of 5. Insights rank coffees by average overall score.
 - Only saved coffees and recipes are displayed. Statistics only count saved entries.
 - Use **Export journal** to download a JSON snapshot from whichever database the app is connected to. To back up and restore the local database itself, stop the server and copy/restore `data/coffee-club.sqlite`. For the cloud database, use Supabase's backup/export tools. JSON exports are for archival use; there is no in-app import.
 - Deleting a coffee also deletes its ratings, after confirmation.
 - Shared entries refresh every 15 seconds while the page is open in a visible tab, and immediately when you return to it. Coffee photography and fonts use Unsplash and Google Fonts; data storage does not rely on those services.
 
 ## Verify
+
+For an existing Supabase deployment, run [002_ten_point_ratings.sql](supabase/migrations/002_ten_point_ratings.sql) in its SQL Editor before deploying the updated frontend. SQLite upgrades automatically on server startup. Existing overall, flavor/taste, and aroma ratings are doubled to convert the five-point scale to ten points; the new Would drink again score starts at 5 because an old Body score does not measure that criterion. The upgrade runs only once and preserves names and notes.
 
 ```sh
 npm test
