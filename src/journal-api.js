@@ -1,14 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
 const fields = {
-  coffees: ['name', 'method', 'notes', 'roaster', 'origin', 'roast', 'date', 'tags'],
+  coffees: ['name', 'method', 'notes', 'roaster', 'origin', 'roast', 'date', 'tags', 'made'],
   recipes: ['name', 'method', 'notes', 'author', 'ingredients', 'steps', 'time'],
   ratings: ['name', 'notes', 'overall', 'taste', 'wouldDrinkAgain', 'aroma'],
 };
 
 function entryFromRow(kind, row) {
   const { updated_at, coffee_id, member, would_drink_again, deleted_at, ...entry } = row;
-  if (kind === 'coffees') entry.date = entry.date || '';
+  if (kind === 'coffees') {
+    if (!('made' in row)) throw new Error('Update your Supabase database by running 004_want_to_make.sql before using Want to make.');
+    entry.date = entry.date || '';
+  }
   if (deleted_at) entry.deletedAt = deleted_at;
   if (kind === 'ratings') {
     if ('flavor' in row || 'body' in row) throw new Error('Update your Supabase database by running 002_ten_point_ratings.sql before using ten-point ratings.');
@@ -67,7 +70,10 @@ export function createJournalApi({ url, key, allowLocal = true, clientFactory = 
     if (extra || !['POST', 'PUT'].includes(method) || (method === 'PUT' && (!id || kind === 'ratings')) || (method === 'POST' && id)) throw new Error('Invalid journal request.');
     const value = JSON.parse(options.body);
     const row = Object.fromEntries(fields[kind].map(field => [field, typeof value[field] === 'string' ? value[field].trim() : value[field] ?? '']));
-    if (kind === 'coffees') row.date = row.date || null;
+    if (kind === 'coffees') {
+      row.date = row.date || null;
+      row.made = value.made !== false;
+    }
     if (kind === 'ratings') {
       row.coffee_id = value.coffeeId;
       row.would_drink_again = row.wouldDrinkAgain;
