@@ -57,7 +57,8 @@ test('initial club coffees are seeded once without inventing tasting details or 
     store.remove('coffees', 'club-korean-coffee');
     store.close();
     store = createStore(path, { seed: true });
-    assert.equal(store.all().coffees.length, 2);
+    assert.equal(store.all().coffees.length, 3);
+    assert.equal(store.all().coffees.filter(entry => !entry.deletedAt).length, 2);
     const saved = store.save('coffees', { ...store.all().coffees[0], notes: 'Our first tasting.' }, 'club-brazilian-coffee');
     assert.equal(saved.date, '');
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
@@ -78,9 +79,27 @@ test('tastings, recipes, and ratings survive reopening the database', () => {
     store.save('ratings', { coffeeId: entry.id, name: 'alex', overall: 10, aroma: 10, taste: 10, wouldDrinkAgain: 8 });
     assert.equal(store.all().ratings.length, 1);
     assert.equal(store.all().ratings[0].overall, 10);
-    store.remove('coffees', entry.id);
-    assert.equal(store.all().ratings.length, 0);
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+});
+test('deleting moves coffees and recipes to Recently deleted and restoring brings them back with ratings', () => {
+  const store = createStore(':memory:');
+  try {
+    const entry = store.save('coffees', coffee);
+    const recipe = store.save('recipes', { name: 'Morning cup', method: 'Pour over', ingredients: '18g coffee', steps: 'Brew.' });
+    store.save('ratings', { coffeeId: entry.id, name: 'Alex', overall: 8, aroma: 7, taste: 8, wouldDrinkAgain: 9 });
+    assert.equal(store.remove('coffees', entry.id), true);
+    assert.equal(store.remove('coffees', entry.id), false);
+    assert.equal(store.remove('recipes', recipe.id), true);
+    assert.ok(store.all().coffees[0].deletedAt);
+    assert.ok(store.all().recipes[0].deletedAt);
+    assert.equal(store.all().ratings.length, 1);
+    assert.equal(store.restore('coffees', entry.id), true);
+    assert.equal(store.restore('coffees', entry.id), false);
+    assert.equal(store.all().coffees[0].deletedAt, undefined);
+    assert.equal(store.all().ratings[0].name, 'Alex');
+    assert.equal(store.remove('coffees', 'missing'), false);
+    assert.throws(() => store.remove('ratings', store.all().ratings[0].id), /Invalid entry type/);
+  } finally { store.close(); }
 });
 test('rejects malformed entries without modifying the journal', () => {
   const store = createStore(':memory:');

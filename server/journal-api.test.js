@@ -80,6 +80,8 @@ function cloudStub(rows) {
         upsert(row, options) { calls.push(['upsert', kind, row, options]); return query; },
         delete() { calls.push(['delete', kind]); return query; },
         eq(field, value) { calls.push(['eq', kind, field, value]); return query; },
+        is(field, value) { calls.push(['is', kind, field, value]); return query; },
+        not(field, operator, value) { calls.push(['not', kind, field, operator, value]); return query; },
         then(resolve, reject) { return Promise.resolve({ data: rows[kind], error: null }).then(resolve, reject); },
       };
       return query;
@@ -98,7 +100,7 @@ test('cloud journal maps persisted database rows into the existing UI contract',
   assert.equal(journal.ratings[0].wouldDrinkAgain, 10);
   assert.equal(journal.ratings[0].taste, 9);
 });
-test('cloud writes keep rating uniqueness and support updates, optional dates, and deletion', async () => {
+test('cloud writes keep rating uniqueness and support updates and optional dates', async () => {
   const { api, calls } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee', date: null }], recipes: [{ id: 'recipe' }], ratings: [{ id: 'rating', coffee_id: 'coffee' }] });
   await api('ratings', { method: 'POST', body: JSON.stringify({ coffeeId: 'coffee', name: ' Alex ', overall: 8, aroma: 5, taste: 10, wouldDrinkAgain: 1, id: 'ignored' }) });
   const upsert = calls.find(call => call[0] === 'upsert');
@@ -111,8 +113,39 @@ test('cloud writes keep rating uniqueness and support updates, optional dates, a
   assert.deepEqual(upsert[3], { onConflict: 'coffee_id,member' });
   await api('coffees/coffee', { method: 'PUT', body: JSON.stringify({ name: 'Korean coffee', method: 'Not recorded', roast: 'Not recorded', date: '' }) });
   assert.equal(calls.find(call => call[0] === 'update')[2].date, null);
-  assert.deepEqual(await api('recipes/recipe', { method: 'DELETE' }), { success: true });
   await assert.rejects(api('other', { method: 'POST', body: '{}' }), /Invalid journal request/);
+});
+test('cloud deletion only marks entries as deleted and restore clears the mark', async () => {
+  const { api, calls } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee', deleted_at: '2026-11-02T08:00:00Z' }], recipes: [{ id: 'recipe' }], ratings: [] });
+  assert.equal((await api('journal')).coffees[0].deletedAt, '2026-11-02T08:00:00Z');
+  assert.deepEqual(await api('recipes/recipe', { method: 'DELETE' }), { success: true });
+  assert.equal(calls.some(call => call[0] === 'delete'), false);
+  assert.ok(calls.find(call => call[0] === 'update' && call[1] === 'recipes')[2].deleted_at);
+  assert.deepEqual(calls.find(call => call[0] === 'is'), ['is', 'recipes', 'deleted_at', null]);
+  assert.deepEqual(await api('coffees/coffee/restore', { method: 'POST' }), { success: true });
+  assert.deepEqual(calls.filter(call => call[0] === 'update' && call[1] === 'coffees').at(-1)[2], { deleted_at: null });
+  assert.deepEqual(calls.find(call => call[0] === 'not'), ['not', 'coffees', 'deleted_at', 'is', null]);
+  await assert.rejects(api('ratings/rating', { method: 'DELETE' }), /Invalid journal request/);
+  await assert.rejects(api('coffees/coffee/other', { method: 'POST' }), /Invalid journal request/);
+});
+test('Recently deleted migration stops shared visitors from erasing entries but allows soft delete and restore', async () => {
+  const db = new PGlite();
+  const migrations = ['001_shared_journal.sql', '002_ten_point_ratings.sql', '003_recently_deleted.sql'].map(name => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
+  try {
+    await db.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
+    for (const migration of migrations) await db.exec(migration);
+    await db.exec(migrations[2]);
+    await db.query("INSERT INTO public.ratings (coffee_id, name) VALUES ('club-korean-coffee', 'Alex')");
+    await db.exec('SET ROLE anon;');
+    await assert.rejects(db.query("DELETE FROM public.coffees WHERE id = 'club-korean-coffee'"), /permission denied/);
+    await assert.rejects(db.query('DELETE FROM public.ratings'), /permission denied/);
+    await assert.rejects(db.query('DELETE FROM public.recipes'), /permission denied/);
+    await db.query("UPDATE public.coffees SET deleted_at = now() WHERE id = 'club-korean-coffee'");
+    assert.ok((await db.query("SELECT deleted_at FROM public.coffees WHERE id = 'club-korean-coffee'")).rows[0].deleted_at);
+    assert.equal((await db.query('SELECT * FROM public.ratings')).rows.length, 1);
+    await db.query("UPDATE public.coffees SET deleted_at = null WHERE id = 'club-korean-coffee'");
+    assert.equal((await db.query('SELECT * FROM public.coffees WHERE deleted_at IS NULL')).rows.length, 3);
+  } finally { await db.close(); }
 });
 test('localhost still uses its server and misconfigured static hosting reports a useful error', async () => {
   let requested;
