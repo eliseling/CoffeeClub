@@ -20,16 +20,16 @@ The club starts with **Korean coffee**, **Brazilian coffee**, and **Iced Biscoff
 GitHub Pages only hosts static files. It cannot run the SQLite/Express server or save changes back into your repository. The app therefore uses **Supabase PostgreSQL** for shared storage when published. Everyone using the site connects to the same cloud journal; your laptop does not need to stay running. Creating a GitHub Pages URL alone is not enough: complete the database setup below first.
 
 1. Create a project at https://supabase.com/dashboard. Use a dedicated project for this club.
-2. Open its **SQL Editor** and run [the database setup](supabase/migrations/001_shared_journal.sql), then [the ten-point rating update](supabase/migrations/002_ten_point_ratings.sql). This creates the journal tables, validates inputs, enables shared access, and adds the three coffees without invented ratings or recipes.
+2. Open its **SQL Editor** and run [the database setup](supabase/migrations/001_shared_journal.sql), then [the ten-point rating update](supabase/migrations/002_ten_point_ratings.sql), then [the Recently deleted update](supabase/migrations/003_recently_deleted.sql). This creates the journal tables, validates inputs, enables shared access, and adds the three coffees without invented ratings or recipes.
 3. In the Supabase **Connect** dialog or **Settings > API Keys**, find the project URL and the **publishable key** (`sb_publishable_...`). Never use a secret key or the legacy `service_role` key in this app. Publishable keys are intentionally visible to browsers; they are not member passwords.
 4. In your GitHub repository, open **Settings > Secrets and variables > Actions** and create two repository secrets: `VITE_SUPABASE_URL` with the project URL, and `VITE_SUPABASE_PUBLISHABLE_KEY` with the publishable key. Enter them directly in GitHub, not in chat or source code.
 5. Open **Settings > Pages** and select **GitHub Actions** as the source, not **Deploy from a branch**.
 6. Push the application to `main`, or run **Publish Coffee Club** from the **Actions** tab. The workflow tests the app, builds with the cloud settings and correct repository URL prefix, and publishes the site. If your default branch is not `main`, update the branch in [.github/workflows/deploy-pages.yml](.github/workflows/deploy-pages.yml).
 7. Open the URL shown in **Settings > Pages** or the completed deployment. Add a tasting or rating, then open the same URL in another browser to verify it is shared. Other visitors receive updates within 15 seconds.
 
-**Access warning:** this is a shared notebook without sign-in. Anyone who can access the public app/database can read, create, change, or delete the club's entries and rate using any name. The database's shared-access policies intentionally permit this. A hard-to-guess URL is not access control. Keep sensitive information out of it and add member authentication/restrictive policies before using it for private or controlled records. GitHub repository privacy does not make the database private.
+**Access warning:** this is a shared notebook without sign-in. Anyone who can access the public app/database can read, create, and change the club's entries, move them to Recently deleted, and rate using any name. The website cannot erase entries permanently. The database's shared-access policies intentionally permit this. A hard-to-guess URL is not access control. Keep sensitive information out of it and add member authentication/restrictive policies before using it for private or controlled records. GitHub repository privacy does not make the database private.
 
-Check your Supabase plan's quotas, inactivity/pause rules, and backup policy. Export the journal regularly. Storage is persistent independently of browsers and redeployments, but it is not a substitute for backups.
+Check your Supabase plan's quotas, inactivity/pause rules, and backup policy. The **Back up Coffee Club** workflow exports the shared journal every night and keeps each copy as a downloadable artifact for 90 days (Actions tab > Back up Coffee Club > a run > Artifacts). In a public repository, anyone signed in to GitHub can download these artifacts; they contain the same data the website shows. GitHub pauses scheduled workflows after 60 days without repository activity, so check the Actions tab now and then. Storage is persistent independently of browsers and redeployments, but it is not a substitute for backups.
 
 ## Same journal on localhost and online
 
@@ -59,12 +59,12 @@ Open http://localhost:3001. `PORT` sets the production port. `COFFEE_DB` sets th
 - Overall, Taste, Would drink again, and Aroma scores range from 1 to 10, with a default/neutral score of 5. Insights rank coffees by average overall score.
 - Only saved coffees and recipes are displayed. Statistics only count saved entries.
 - Use **Export journal** to download a JSON snapshot from whichever database the app is connected to. To back up and restore the local database itself, stop the server and copy/restore `data/coffee-club.sqlite`. For the cloud database, use Supabase's backup/export tools. JSON exports are for archival use; there is no in-app import.
-- Deleting a coffee also deletes its ratings, after confirmation.
+- Deleting a coffee or recipe moves it to **Recently deleted** (a coffee keeps its ratings), with an Undo button right after. Anyone can restore it from there. To erase an entry for good, use Supabase's Table Editor.
 - Shared entries refresh every 15 seconds while the page is open in a visible tab, and immediately when you return to it. Coffee photography and fonts use Unsplash and Google Fonts; data storage does not rely on those services.
 
 ## Verify
 
-For an existing Supabase deployment, run [002_ten_point_ratings.sql](supabase/migrations/002_ten_point_ratings.sql) in its SQL Editor before deploying the updated frontend. SQLite upgrades automatically on server startup. Existing overall, flavor/taste, and aroma ratings are doubled to convert the five-point scale to ten points; the new Would drink again score starts at 5 because an old Body score does not measure that criterion. The upgrade runs only once and preserves names and notes.
+For an existing Supabase deployment, run any new migration in its SQL Editor before deploying the updated frontend: [002_ten_point_ratings.sql](supabase/migrations/002_ten_point_ratings.sql), then [003_recently_deleted.sql](supabase/migrations/003_recently_deleted.sql). SQLite upgrades automatically on server startup. Existing overall, flavor/taste, and aroma ratings are doubled to convert the five-point scale to ten points; the new Would drink again score starts at 5 because an old Body score does not measure that criterion. The upgrade runs only once and preserves names and notes.
 
 ```sh
 npm test

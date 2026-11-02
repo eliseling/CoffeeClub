@@ -1,0 +1,35 @@
+name: Back up Coffee Club
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Export the shared journal
+        id: export
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          for table in coffees recipes ratings; do
+            curl --fail --silent --show-error "$SUPABASE_URL/rest/v1/$table?select=*&order=id" -H "apikey: $SUPABASE_KEY" -o "$table.json"
+            jq -e 'type == "array"' "$table.json" > /dev/null || { echo "::error::$table did not return a list of rows."; exit 1; }
+            jq -e 'length < 1000' "$table.json" > /dev/null || { echo "::error::$table has 1000+ rows; the backup needs paging before it can be trusted."; exit 1; }
+          done
+          jq -n --arg exportedAt "$(date -u +%FT%TZ)" --slurpfile coffees coffees.json --slurpfile recipes recipes.json --slurpfile ratings ratings.json \
+            '{source: "supabase", exportedAt: $exportedAt, coffees: $coffees[0], recipes: $recipes[0], ratings: $ratings[0]}' > coffee-club-backup.json
+          jq -r '"Backed up \(.coffees | length) coffees, \(.recipes | length) recipes and \(.ratings | length) ratings."' coffee-club-backup.json | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coffee-club-backup-${{ steps.export.outputs.date }}
+          path: coffee-club-backup.json
+          retention-days: 90

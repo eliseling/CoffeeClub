@@ -34,6 +34,9 @@ nav { padding: 0 14px; display: grid; gap: 6px; }
 .backup-link { width: 100%; text-align: left; padding: 19px 0 15px; border-top: 1px solid #ded5c9; display: flex; align-items: center; gap: 9px; font-size: 10px; color: #7e7163; }
 .backup-link svg:last-child { margin-left: auto; }
 .backup-link:hover { color: var(--brown); }
+.deleted-link { width: 100%; text-align: left; padding: 0 0 15px; display: flex; align-items: center; gap: 9px; font-size: 10px; color: #7e7163; }
+.deleted-link:hover, .deleted-link.active { color: var(--brown); }
+.deleted-link.active { font-weight: 600; }
 .sidebar-foot { font-size: 9px; display: flex; gap: 6px; align-items: center; color: #9c8e7c; }
 .status-dot { width: 5px; height: 5px; background: #879274; border-radius: 50%; }
 .status-dot.offline { background: #bd624c; }
@@ -196,6 +199,8 @@ input::placeholder, textarea::placeholder { color: #b0a394; }
 .toast > span { height: 25px; width: 25px; background: #e4edda; display: grid; place-items: center; border-radius: 50%; flex-shrink: 0; }
 .toast.error { color: #9e6249; background: #fff5ef; border-color: #dfbcac; }
 .toast.error > span { background: #f2ddd2; }
+.toast-action { font-weight: 600; color: var(--brown); text-decoration: underline; text-underline-offset: 3px; padding: 4px 6px; border-radius: 4px; }
+.toast-action:hover:not(:disabled) { background: #eef3e6; }
 .recipe-card { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #fffdfa; }
 .recipe-image { display: block; width: 100%; aspect-ratio: 1.7; position: relative; padding: 0; overflow: hidden; }
 .recipe-image img { transition: transform .5s; }
@@ -231,6 +236,13 @@ input::placeholder, textarea::placeholder { color: #b0a394; }
 .dimension-row small { color: #bbab91; font-size: 9px; }
 .profile-note { display: flex; gap: 12px; align-items: center; padding-top: 25px; border-top: 1px solid var(--line); margin-top: 32px; color: #9e895f; }
 .profile-note p { font-family: 'Lora', serif; font-size: 15px; }
+.deleted-intro { font-size: 12px; line-height: 1.6; color: var(--muted); margin-bottom: 18px; }
+.deleted-list { border: 1px solid var(--line); border-radius: 6px; background: #fffdfa; }
+.deleted-row { display: flex; align-items: center; gap: 16px; padding: 14px 18px; border-top: 1px solid #f0e9df; }
+.deleted-row:first-child { border-top: 0; }
+.deleted-row > div { flex: 1; min-width: 0; }
+.deleted-row strong { display: block; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.deleted-row small { display: block; margin-top: 3px; font-size: 10px; color: #ad9a80; }
 .profile-note small { font-family: 'DM Sans', sans-serif; display: block; font-size: 9px; color: #b4a082; margin-top: 6px; }
 .mobile-menu { display: none; }
 .mobile-brand { display: none; }

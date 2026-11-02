@@ -7,8 +7,9 @@ const fields = {
 };
 
 function entryFromRow(kind, row) {
-  const { updated_at, coffee_id, member, would_drink_again, ...entry } = row;
+  const { updated_at, coffee_id, member, would_drink_again, deleted_at, ...entry } = row;
   if (kind === 'coffees') entry.date = entry.date || '';
+  if (deleted_at) entry.deletedAt = deleted_at;
   if (kind === 'ratings') {
     if ('flavor' in row || 'body' in row) throw new Error('Update your Supabase database by running 002_ten_point_ratings.sql before using ten-point ratings.');
     entry.coffeeId = coffee_id;
@@ -53,14 +54,17 @@ export function createJournalApi({ url, key, allowLocal = true, clientFactory = 
       return { coffees, recipes, ratings };
     }
     const [kind, id, extra] = path.split('/');
-    if (!fields[kind] || extra) throw new Error('Invalid journal request.');
-    if (method === 'DELETE' && id) {
-      const { data, error } = await client.from(kind).delete().eq('id', id).select('id');
-      if (error) throw new Error(`Unable to delete this entry: ${error.message}`);
+    if (!fields[kind] || (extra && extra !== 'restore')) throw new Error('Invalid journal request.');
+    const deleting = method === 'DELETE' && id && !extra;
+    if (deleting || (method === 'POST' && extra === 'restore')) {
+      if (kind === 'ratings') throw new Error('Invalid journal request.');
+      const query = client.from(kind).update({ deleted_at: deleting ? new Date().toISOString() : null }).eq('id', id);
+      const { data, error } = await (deleting ? query.is('deleted_at', null) : query.not('deleted_at', 'is', null)).select('id');
+      if (error) throw new Error(`Unable to ${deleting ? 'delete' : 'restore'} this entry: ${error.message}`);
       if (!data.length) throw new Error('Entry not found.');
       return { success: true };
     }
-    if (!['POST', 'PUT'].includes(method) || (method === 'PUT' && (!id || kind === 'ratings')) || (method === 'POST' && id)) throw new Error('Invalid journal request.');
+    if (extra || !['POST', 'PUT'].includes(method) || (method === 'PUT' && (!id || kind === 'ratings')) || (method === 'POST' && id)) throw new Error('Invalid journal request.');
     const value = JSON.parse(options.body);
     const row = Object.fromEntries(fields[kind].map(field => [field, typeof value[field] === 'string' ? value[field].trim() : value[field] ?? '']));
     if (kind === 'coffees') row.date = row.date || null;

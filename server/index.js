@@ -26,6 +26,12 @@ app.delete('/api/:kind/:id', (request, response, next) => {
     response.json({ success: true });
   } catch (error) { next(error); }
 });
+app.post('/api/:kind/:id/restore', (request, response, next) => {
+  try {
+    if (!store.restore(request.params.kind, request.params.id)) return response.status(404).json({ error: 'Entry not found.' });
+    response.json({ success: true });
+  } catch (error) { next(error); }
+});
 app.use('/api', (request, response) => response.status(404).json({ error: 'Endpoint not found.' }));
 app.use((error, request, response, next) => {
   response.status(400).json({ error: error.message || 'Unable to save this entry.' });

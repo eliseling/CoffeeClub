@@ -92,9 +92,16 @@ export function createStore(filename, { seed = false } = {}) {
     }
     return entry;
   }
-  function remove(kind, id) {
-    if (!['coffees', 'recipes', 'ratings'].includes(kind)) throw new Error('Invalid entry type.');
-    return db.prepare(`DELETE FROM ${kind} WHERE id = ?`).run(id).changes > 0;
+  function setDeleted(kind, id, deleted) {
+    if (!['coffees', 'recipes'].includes(kind)) throw new Error('Invalid entry type.');
+    const row = db.prepare(`SELECT payload FROM ${kind} WHERE id = ?`).get(id);
+    if (!row) return false;
+    const { deletedAt, ...entry } = JSON.parse(row.payload);
+    if (Boolean(deletedAt) === deleted) return false;
+    db.prepare(`UPDATE ${kind} SET payload = ? WHERE id = ?`).run(JSON.stringify(deleted ? { ...entry, deletedAt: new Date().toISOString() } : entry), id);
+    return true;
   }
-  return { all, save, remove, close: () => db.close() };
+  const remove = (kind, id) => setDeleted(kind, id, true);
+  const restore = (kind, id) => setDeleted(kind, id, false);
+  return { all, save, remove, restore, close: () => db.close() };
 }
