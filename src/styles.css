@@ -102,7 +102,7 @@ input::placeholder, textarea::placeholder { color: #b0a394; }
 .roast-filters button { border: 1px solid var(--line); border-radius: 4px; padding: 7px 12px; }
 .roast-filters button.active { background: var(--brown); color: #fffaf2; border-color: var(--brown); }
 .coffee-grid, .recipe-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 21px; }
-.coffee-card { background: #fffdfa; border: 1px solid #e8dfd4; border-radius: 7px; overflow: hidden; box-shadow: 0 3px 6px #392c2503; animation: reveal .4s both; animation-delay: calc(var(--index) * 45ms); transition: box-shadow .25s; }
+.coffee-card { display: flex; flex-direction: column; background: #fffdfa; border: 1px solid #e8dfd4; border-radius: 7px; overflow: hidden; box-shadow: 0 3px 6px #392c2503; animation: reveal .4s both; animation-delay: calc(var(--index) * 45ms); transition: box-shadow .25s; }
 .coffee-card:hover { box-shadow: 0 7px 20px #392c2510; }
 .card-image-button { width: 100%; position: relative; display: block; padding: 0; aspect-ratio: 1.75; background: #d8c7b0; overflow: hidden; }
 .card-image-button img { transition: transform .5s; }
@@ -112,19 +112,22 @@ input::placeholder, textarea::placeholder { color: #b0a394; }
 .coffee-card:nth-child(3) .card-image-button img { object-position: 50% 52%; }
 .method-tag { position: absolute; left: 13px; top: 13px; background: #fffaf0ed; color: #79634b; font-size: 8px; font-weight: 500; border-radius: 3px; padding: 5px 8px; backdrop-filter: blur(6px); }
 .example-tag { position: absolute; right: 11px; bottom: 11px; font-size: 7px; color: #fff8e9; font-weight: 600; letter-spacing: 1px; background: #3c2b218c; padding: 4px 6px; border-radius: 2px; }
-.card-body { padding: 18px 16px 11px; }
-.roaster-name { display: block; font-size: 8px; text-transform: uppercase; color: #a38f76; font-weight: 500; letter-spacing: 1.2px; line-height: 1.5; overflow-wrap: anywhere; }
-.card-body h3, .recipe-card h3 { font-size: 17px; margin: 7px 0 9px; line-height: 1.35; min-height: 23px; }
-.card-body h3 button, .recipe-card h3 button { font: inherit; padding: 0; text-align: left; overflow-wrap: anywhere; }
+.card-body { flex: 1; display: flex; flex-direction: column; padding: 18px 16px 11px; }
+.roaster-name { display: block; font-size: 8px; text-transform: uppercase; color: #a38f76; font-weight: 500; letter-spacing: 1.2px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-body h3, .recipe-card h3 { font-size: 17px; margin: 7px 0 9px; line-height: 1.35; min-height: 2.7em; }
+.card-body h3 button, .recipe-card h3 button { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font: inherit; padding: 0; text-align: left; overflow-wrap: anywhere; }
 .card-body h3 button:hover, .recipe-card h3 button:hover { color: #a0794d; }
-.coffee-origin { display: flex; align-items: center; gap: 7px; color: #a49684; font-size: 8px; flex-wrap: wrap; }
-.coffee-origin > span:first-child { display: flex; align-items: center; gap: 4px; }
+.coffee-origin { display: flex; align-items: center; gap: 7px; color: #a49684; font-size: 8px; white-space: nowrap; }
+.coffee-origin > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.coffee-origin > span:first-child svg { vertical-align: -2px; margin-right: 4px; }
 .origin-dot { height: 2px; width: 2px; border-radius: 50%; background: #bdae9d; }
 .flavor-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 15px 0 13px; min-height: 20px; }
 .flavor-tags span { display: inline-flex; background: #f2ede5; font-size: 8px; padding: 4px 7px; color: #917e67; border-radius: 3px; max-width: 100%; overflow-wrap: anywhere; }
 .flavor-tags span:nth-child(2) { background: #edf0e6; color: #879077; }
-.card-rating { display: flex; justify-content: space-between; align-items: center; margin-top: 3px; }
-.card-rating > div { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.card-body .flavor-tags { flex-wrap: nowrap; overflow: hidden; }
+.card-body .flavor-tags span { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-rating { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
+.card-rating > div { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
 .stars { display: inline-flex; gap: 2px; color: #ded6c7; }
 .stars .filled, .star-picker .filled { fill: var(--gold); color: var(--gold); }
 .card-rating strong { font-size: 11px; font-weight: 600; color: #7c664c; }
@@ -213,12 +216,12 @@ input::placeholder, textarea::placeholder { color: #b0a394; }
 .toast.error > span { background: #f2ddd2; }
 .toast-action { font-weight: 600; color: var(--brown); text-decoration: underline; text-underline-offset: 3px; padding: 4px 6px; border-radius: 4px; }
 .toast-action:hover:not(:disabled) { background: #eef3e6; }
-.recipe-card { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #fffdfa; }
+.recipe-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #fffdfa; }
 .recipe-image { display: block; width: 100%; aspect-ratio: 1.7; position: relative; padding: 0; overflow: hidden; }
 .recipe-image img { transition: transform .5s; }
-.recipe-card-body { padding: 20px; }
-.recipe-card-body > p { font-size: 11px; color: #a38f76; line-height: 1.8; margin: 10px 0 20px; overflow-wrap: anywhere; }
-.recipe-card-footer { display: flex; gap: 12px; justify-content: space-between; align-items: center; padding-top: 15px; border-top: 1px solid var(--line); font-size: 9px; color: #a08a6b; }
+.recipe-card-body { flex: 1; display: flex; flex-direction: column; padding: 20px; }
+.recipe-card-body > p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; min-height: 3.6em; font-size: 11px; color: #a38f76; line-height: 1.8; margin: 10px 0 20px; overflow-wrap: anywhere; }
+.recipe-card-footer { margin-top: auto; display: flex; gap: 12px; justify-content: space-between; align-items: center; padding-top: 15px; border-top: 1px solid var(--line); font-size: 9px; color: #a08a6b; }
 .recipe-card-footer > span, .recipe-card-footer button { display: flex; align-items: center; gap: 6px; }
 .recipe-card-footer button { color: #6c7159; font-size: 10px; padding: 0; }
 .recipe-detail h3 { font-size: 20px; margin: 25px 0 13px; color: #70573c; }
