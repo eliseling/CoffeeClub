@@ -129,8 +129,8 @@ input::placeholder, textarea::placeholder { color: #b0a394; }
 .stars .filled, .star-picker .filled { fill: var(--gold); color: var(--gold); }
 .card-rating strong { font-size: 11px; font-weight: 600; color: #7c664c; }
 .card-rating > div > span:last-child { font-size: 8px; color: #b1a28f; }
-.card-arrow { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 4px; color: #9b8569; }
-.card-arrow:hover { background: #ece4d7; }
+.coffee-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-top: 15px; }
+.coffee-actions button { min-height: 44px; padding: 10px 8px; }
 .card-date { display: flex; gap: 6px; align-items: center; border-top: 1px solid #eee7de; background: #fbf8f3; padding: 10px 16px; color: #b2a28e; font-size: 8px; }
 .page-footer { display: flex; justify-content: space-between; align-items: center; gap: 20px; border-top: 1px solid var(--line); margin-top: 34px; padding: 22px 0; color: #b2a391; font-size: 8px; }
 .page-footer > span:first-child { display: flex; align-items: center; gap: 7px; }
@@ -159,6 +159,18 @@ input::placeholder, textarea::placeholder { color: #b0a394; }
 .overall-rating { padding: 26px 0; margin: 21px 0; border-block: 1px solid var(--line); }
 .overall-rating .rating-sliders { margin-bottom: 12px; }
 .overall-rating > small { display: block; text-align: right; }
+.rating-criteria { display: grid; gap: 24px; margin-bottom: 27px; }
+.rating-choice { display: grid; grid-template-columns: minmax(0, 1fr) 168px; align-items: center; gap: 12px; min-width: 0; }
+.rating-choice > label { font-size: 12px; font-weight: 500; color: #715c45; line-height: 1.5; }
+.rating-stepper { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; height: 44px; border: 1px solid #d5c7b5; border-radius: 5px; background: #faf7f2; }
+.rating-stepper button { display: grid; place-items: center; padding: 0; color: #715c45; border-radius: 4px; touch-action: manipulation; }
+.rating-stepper button:hover:not(:disabled) { background: #eee5d9; }
+.rating-stepper button:disabled { cursor: default; opacity: .35; }
+.rating-value { display: flex; align-items: center; justify-content: center; gap: 3px; border-inline: 1px solid #e3dbcf; min-width: 0; }
+.rating-value input { appearance: textfield; -moz-appearance: textfield; width: 30px; min-width: 0; padding: 0; border: 0; background: transparent; text-align: center; font-size: 16px; font-weight: 600; color: var(--brown); }
+.rating-value input::-webkit-inner-spin-button, .rating-value input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.rating-value > span { font-size: 10px; color: #a38d71; white-space: nowrap; }
+.overall-rating > small { margin-top: 10px; }
 .overall-rating > span { font-size: 11px; color: #8c785f; }
 .star-picker { display: flex; gap: 9px; margin: 14px 0 8px; }
 .star-picker button { padding: 3px; color: #dcd0bf; border-radius: 4px; }
