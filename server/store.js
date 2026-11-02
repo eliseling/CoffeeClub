@@ -36,8 +36,10 @@ export function validate(kind, input) {
       roast: text(input.roast, 'roast', true, 20),
       date: text(input.date ?? '', 'date', false, 10),
       tags: text(input.tags ?? '', 'tasting notes', false, 200),
+      made: input.made ?? true,
     });
     if (!roasts.includes(result.roast)) throw new Error('Choose a roast level.');
+    if (typeof result.made !== 'boolean') throw new Error('Choose whether the coffee has been made.');
     if (result.date && (!/^\d{4}-\d{2}-\d{2}$/.test(result.date) || Number.isNaN(Date.parse(result.date)) || new Date(result.date).toISOString().slice(0, 10) !== result.date)) throw new Error('Choose a valid tasting date.');
   } else if (kind === 'recipes') {
     Object.assign(result, { author: text(input.author ?? '', 'author', false, 80), ingredients: text(input.ingredients, 'ingredients', true), steps: text(input.steps, 'recipe steps', true), time: text(input.time ?? '', 'brew time', false, 40) });
@@ -78,7 +80,8 @@ export function createStore(filename, { seed = false } = {}) {
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   const list = kind => db.prepare(`SELECT payload FROM ${kind}`).all().map(row => JSON.parse(row.payload));
-  const all = () => ({ coffees: list('coffees'), recipes: list('recipes'), ratings: list('ratings') });
+  // Coffees saved before Want to make existed have no made flag, and they were all made.
+  const all = () => ({ coffees: list('coffees').map(coffee => ({ made: true, ...coffee })), recipes: list('recipes'), ratings: list('ratings') });
   function save(kind, input, id) {
     const value = validate(kind, input);
     if (id && !db.prepare(`SELECT id FROM ${kind} WHERE id = ?`).get(id)) throw new Error('Entry not found.');

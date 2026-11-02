@@ -101,6 +101,26 @@ test('deleting moves coffees and recipes to Recently deleted and restoring bring
     assert.throws(() => store.remove('ratings', store.all().ratings[0].id), /Invalid entry type/);
   } finally { store.close(); }
 });
+test('coffees can wait in Want to make and older coffees count as made', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'coffee-club-made-'));
+  const path = join(directory, 'journal.sqlite');
+  let store = createStore(path);
+  try {
+    const planned = store.save('coffees', { ...coffee, date: '', made: false });
+    assert.equal(store.save('coffees', coffee).made, true);
+    assert.throws(() => store.save('coffees', { ...coffee, made: 'yes' }), /has been made/);
+    const legacy = new DatabaseSync(path);
+    legacy.prepare('INSERT INTO coffees (id, payload) VALUES (?, ?)').run('legacy', JSON.stringify({ id: 'legacy', name: 'Old beans', method: 'Pour over', roast: 'Light', date: '', tags: '', notes: '', roaster: '', origin: '' }));
+    legacy.close();
+    store.close();
+    store = createStore(path);
+    const coffees = store.all().coffees;
+    assert.equal(coffees.find(entry => entry.id === planned.id).made, false);
+    assert.equal(coffees.find(entry => entry.id === 'legacy').made, true);
+    store.save('coffees', { ...planned, made: true, date: '2026-11-02' }, planned.id);
+    assert.equal(store.all().coffees.find(entry => entry.id === planned.id).made, true);
+  } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+});
 test('rejects malformed entries without modifying the journal', () => {
   const store = createStore(':memory:');
   try {

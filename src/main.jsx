@@ -1,27 +1,15 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowDownToLine, ArrowRight, ArrowUpRight, BarChart3, BookOpen, Check, ChevronDown, Clock3, Coffee, Leaf, Menu, Minus, Pencil, Plus, RotateCcw, Search, SlidersHorizontal, Star, Trash2, Users, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowRight, ArrowUpRight, BarChart3, BookOpen, Check, ChevronDown, Clock3, Coffee, Flame, Leaf, ListTodo, Menu, Minus, Pencil, Plus, RotateCcw, Search, SlidersHorizontal, Star, Trash2, Users, X } from 'lucide-react';
 import { methods as METHODS, roasts as ROASTS, ratingDimensions, neutralRatings } from '../shared/journal.js';
 import { createJournalApi } from './journal-api.js';
 import './styles.css';
 
-const photo = (id, width = 700) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${width}&q=85`;
-const PHOTOS = [
-  photo('photo-1447933601403-0c6688de566e'),
-  photo('photo-1442512595331-e89e73853f31'),
-  photo('photo-1495474472287-4d71bcdd2085'),
-  photo('photo-1514432324607-a09d9b4aefdd'),
-  photo('photo-1447933601403-0c6688de566e'),
-  photo('photo-1509042239860-f550ce710b93'),
-];
-function journalPhoto(entry) {
-  if (entry.image) return entry.image;
-  if (entry.id === 'club-iced-biscoff-coffee') return photo('photo-1461023058943-07fcbe16d735');
-  if (entry.id === 'club-korean-coffee') return PHOTOS[3];
-  return PHOTOS[Math.max(0, METHODS.indexOf(entry.method) - 1)];
-}
+const today = () => new Date().toLocaleDateString('en-CA');
+const isPlanned = coffee => coffee.made === false;
 const roastLabel = coffee => coffee.roast === 'Not recorded' ? 'Roast not recorded' : `${coffee.roast} roast`;
-const methodLabel = entry => entry.method === 'Not recorded' ? 'Coffee' : entry.method;
+const methodLabel = entry => entry.method === 'Not recorded' ? 'Method not recorded' : entry.method;
+const cardTop = (label, entry) => <div className="card-top"><span className="roaster-name">{label}</span>{entry.method !== 'Not recorded' && <span className="method-pill">{entry.method}</span>}</div>;
 const api = createJournalApi({
   url: import.meta.env.VITE_SUPABASE_URL,
   key: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -33,6 +21,9 @@ function average(ratings, dimension = 'overall') {
 function dateLabel(date) {
   if (!date) return 'Date not recorded';
   return new Date(`${date}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function CoffeeCardHead({ coffee, onOpen }) {
+  return <>{cardTop(coffee.roaster || 'Roaster not recorded', coffee)}<h3><button onClick={onOpen}>{coffee.name}</button></h3><div className="coffee-origin"><span><Leaf size={12} />{coffee.origin || 'Origin not noted'}</span><span className="origin-dot" />{roastLabel(coffee)}</div><div className="flavor-tags">{coffee.tags.split(',').filter(tag => tag.trim()).slice(0, 3).map((tag, index) => <span key={index}>{tag.trim()}</span>)}</div></>;
 }
 function Stars({ value, small = false }) {
   return <span className={`stars ${small ? 'small' : ''}`} aria-label={value ? `${value.toFixed(1)} out of 10` : 'Not rated'}><Star size={small ? 12 : 15} className={value ? 'filled' : ''} /></span>;
@@ -54,9 +45,9 @@ function Modal({ children, title, onClose, wide = false }) {
 function Field({ label, children, full = false }) {
   return <label className={`field ${full ? 'full' : ''}`}><span>{label}</span>{children}</label>;
 }
-function EntryForm({ kind, entry, onSave, onClose }) {
+function EntryForm({ kind, entry, made = true, onSave, onClose }) {
   const recipe = kind === 'recipes';
-  const [values, setValues] = useState(entry || (recipe ? { name: '', method: 'Pour over', author: '', ingredients: '', steps: '', time: '', notes: '' } : { name: '', roaster: '', origin: '', method: 'Pour over', roast: 'Light', date: new Date().toLocaleDateString('en-CA'), tags: '', notes: '' }));
+  const [values, setValues] = useState(entry ? (recipe ? entry : { ...entry, made: !isPlanned(entry) }) : recipe ? { name: '', method: 'Pour over', author: '', ingredients: '', steps: '', time: '', notes: '' } : { name: '', roaster: '', origin: '', method: 'Pour over', roast: 'Light', date: made ? today() : '', tags: '', notes: '', made });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const field = (key, options = {}) => ({ value: values[key] ?? '', onChange: event => setValues({ ...values, [key]: event.target.value }), ...options });
@@ -64,15 +55,16 @@ function EntryForm({ kind, entry, onSave, onClose }) {
     event.preventDefault(); setBusy(true); setError('');
     try { await onSave(kind, values, entry?.id); } catch (failure) { setError(failure.message); setBusy(false); }
   }
-  return <Modal title={`${entry ? 'Edit' : 'Add'} ${recipe ? 'recipe' : 'coffee'}`} onClose={onClose} wide>
+  return <Modal title={`${entry ? 'Edit' : 'Add'} ${recipe ? 'recipe' : values.made || entry ? 'coffee' : 'coffee to make'}`} onClose={onClose} wide>
     <form onSubmit={submit} className="entry-form">
       <div className="form-grid">
         <Field label={recipe ? 'Recipe name *' : 'Coffee name *'} full><input {...field('name', { required: true, maxLength: 100, placeholder: recipe ? 'Recipe name' : 'Coffee name', autoFocus: true })} /></Field>
+        {!recipe && <label className="made-check"><input type="checkbox" role="switch" checked={values.made} onChange={event => setValues({ ...values, made: event.target.checked, date: event.target.checked && !values.date ? today() : values.date })} /><span className="switch-track" aria-hidden="true" /><span>Made it<small>{values.made ? 'Shows on the Coffees page, ready to rate.' : 'Stays in Want to make until someone makes it.'}</small></span></label>}
         {!recipe && <><Field label="Roaster"><input {...field('roaster', { maxLength: 100, placeholder: 'Roaster name' })} /></Field><Field label="Origin"><input {...field('origin', { maxLength: 100, placeholder: 'Country or region' })} /></Field></>}
         <Field label="Brew method *"><select {...field('method')}>{METHODS.map(method => <option key={method}>{method}</option>)}</select></Field>
         {recipe ? <Field label="Brew time"><input {...field('time', { maxLength: 40, placeholder: 'e.g. 3 minutes' })} /></Field> : <Field label="Roast level *"><select {...field('roast')}>{ROASTS.map(roast => <option key={roast}>{roast}</option>)}</select></Field>}
-        {recipe ? <><Field label="Recipe by" full><input {...field('author', { maxLength: 80, placeholder: 'Your name' })} /></Field><Field label="Ingredients *" full><textarea {...field('ingredients', { required: true, maxLength: 2000, rows: 3, placeholder: '20 g coffee\n320 g water at 94 C' })} /></Field><Field label="Steps *" full><textarea {...field('steps', { required: true, maxLength: 2000, rows: 5, placeholder: 'Write down your brewing steps...' })} /></Field></> : <><Field label="Tasting date"><input type="date" {...field('date')} /></Field><Field label="Flavor notes"><input {...field('tags', { maxLength: 200, placeholder: 'Chocolate, citrus, honey...' })} /></Field></>}
-        <Field label="Notes" full><textarea {...field('notes', { maxLength: 2000, rows: 3, placeholder: recipe ? 'Grind size, temperature, or adjustments' : 'Tasting notes' })} /></Field>
+        {recipe ? <><Field label="Recipe by" full><input {...field('author', { maxLength: 80, placeholder: 'Your name' })} /></Field><Field label="Ingredients *" full><textarea {...field('ingredients', { required: true, maxLength: 2000, rows: 3, placeholder: '20 g coffee\n320 g water at 94 C' })} /></Field><Field label="Steps *" full><textarea {...field('steps', { required: true, maxLength: 2000, rows: 5, placeholder: 'Write down your brewing steps...' })} /></Field></> : <>{values.made && <Field label="Tasting date"><input type="date" {...field('date')} /></Field>}<Field label="Flavor notes" full={!values.made}><input {...field('tags', { maxLength: 200, placeholder: 'Chocolate, citrus, honey...' })} /></Field></>}
+        <Field label="Notes" full><textarea {...field('notes', { maxLength: 2000, rows: 3, placeholder: recipe ? 'Grind size, temperature, or adjustments' : values.made ? 'Tasting notes' : 'Ingredients, or where you saw it' })} /></Field>
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="modal-footer"><button type="button" className="secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="primary" disabled={busy}><Check size={17} />{busy ? 'Saving...' : `Save ${recipe ? 'recipe' : 'coffee'}`}</button></div>
@@ -113,21 +105,21 @@ function RateForm({ coffee, ratings, onSave, onClose }) {
     <div className="modal-footer"><button type="button" className="secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="primary" disabled={busy}><Star size={17} />{busy ? 'Saving...' : 'Save rating'}</button></div>
   </form></Modal>;
 }
-function CoffeeDetail({ coffee, ratings, onClose, onEdit, onRate, onDelete }) {
+function CoffeeDetail({ coffee, ratings, moving, onClose, onEdit, onRate, onMade, onDelete }) {
   const score = average(ratings);
+  const planned = isPlanned(coffee);
   return <Modal title={coffee.name} onClose={onClose} wide>
-    <div className="detail-visual"><img src={journalPhoto(coffee)} alt={coffee.name} /><span className="method-tag">{methodLabel(coffee)}</span></div>
-    <div className="detail-content"><div className="detail-meta"><span>{coffee.roaster || 'Roaster not recorded'}</span><span>{dateLabel(coffee.date)}</span></div>
-      <div className="detail-facts"><span><Leaf size={15} />{coffee.origin || 'Origin not noted'}</span><span><Coffee size={15} />{roastLabel(coffee)}</span><span><Star size={15} />{score ? `${score.toFixed(1)} / 10` : 'Not rated yet'}</span></div>
-      <div className="flavor-tags">{coffee.tags.split(',').filter(tag => tag.trim()).map((tag, index) => <span key={index}>{tag.trim()}</span>)}</div>
+    <div className="detail-content"><div className="detail-meta"><span>{coffee.roaster || 'Roaster not recorded'}</span><span>{planned ? 'Want to make' : dateLabel(coffee.date)}</span></div>
+      <div className="detail-facts"><span><Coffee size={15} />{methodLabel(coffee)}</span><span><Leaf size={15} />{coffee.origin || 'Origin not noted'}</span><span><Flame size={15} />{roastLabel(coffee)}</span>{!planned && <span><Star size={15} />{score ? `${score.toFixed(1)} / 10` : 'Not rated yet'}</span>}</div>
+      {coffee.tags.trim() && <div className="flavor-tags">{coffee.tags.split(',').filter(tag => tag.trim()).map((tag, index) => <span key={index}>{tag.trim()}</span>)}</div>}
       {coffee.notes && <p className="preserve-lines">{coffee.notes}</p>}
-      <section className="member-ratings"><h3>Ratings <span>{ratings.length} {ratings.length === 1 ? 'rating' : 'ratings'}</span></h3>{ratings.length ? ratings.map(rating => <div className="member-rating" key={rating.id}><span className="avatar">{rating.name.slice(0, 1).toUpperCase()}</span><div><strong>{rating.name}</strong><small>{ratingDimensions.map(({ key, label }) => `${label} ${rating[key]}/10`).join(' · ')}</small>{rating.notes && <p className="preserve-lines">{rating.notes}</p>}</div><span className="member-score"><Star size={13} />{rating.overall.toFixed(1)} / 10</span></div>) : <p className="muted">No ratings yet.</p>}</section>
+      {!planned && <section className="member-ratings"><h3>Ratings <span>{ratings.length} {ratings.length === 1 ? 'rating' : 'ratings'}</span></h3>{ratings.length ? ratings.map(rating => <div className="member-rating" key={rating.id}><span className="avatar">{rating.name.slice(0, 1).toUpperCase()}</span><div><strong>{rating.name}</strong><small>{ratingDimensions.map(({ key, label }) => `${label} ${rating[key]}/10`).join(' · ')}</small>{rating.notes && <p className="preserve-lines">{rating.notes}</p>}</div><span className="member-score"><Star size={13} />{rating.overall.toFixed(1)} / 10</span></div>) : <p className="muted">No ratings yet.</p>}</section>}
     </div>
-    <div className="modal-footer detail-footer"><button className="icon-button danger" title="Delete coffee" aria-label="Delete coffee" onClick={onDelete}><Trash2 size={18} /></button><button className="secondary" onClick={onEdit}><Pencil size={15} />Edit</button><button className="primary" onClick={onRate}><Star size={17} />Rate coffee</button></div>
+    <div className="modal-footer detail-footer"><button className="icon-button danger" title="Delete coffee" aria-label="Delete coffee" onClick={onDelete}><Trash2 size={18} /></button><button className="secondary" onClick={onEdit}><Pencil size={15} />Edit</button>{planned ? <button className="primary" disabled={moving} onClick={onMade}><Check size={17} />{moving ? 'Moving...' : 'Mark as made'}</button> : <button className="primary" onClick={onRate}><Star size={17} />Rate coffee</button>}</div>
   </Modal>;
 }
 function RecipeDetail({ recipe, onClose, onEdit, onDelete }) {
-  return <Modal title={recipe.name} onClose={onClose} wide><div className="detail-content recipe-detail"><div className="detail-facts"><span><Coffee size={16} />{recipe.method}</span>{recipe.time && <span><Clock3 size={16} />{recipe.time}</span>}{recipe.author && <span>By {recipe.author}</span>}</div><h3>Ingredients</h3><p className="ingredients preserve-lines">{recipe.ingredients}</p><h3>Steps</h3><p className="preserve-lines">{recipe.steps}</p>{recipe.notes && <div className="recipe-tip"><Leaf size={20} /><p className="preserve-lines">{recipe.notes}</p></div>}</div><div className="modal-footer detail-footer"><button className="icon-button danger" onClick={onDelete} title="Delete recipe" aria-label="Delete recipe"><Trash2 size={18} /></button><button className="primary" onClick={onEdit}><Pencil size={17} />Edit recipe</button></div></Modal>;
+  return <Modal title={recipe.name} onClose={onClose} wide><div className="detail-content recipe-detail"><div className="detail-facts"><span><Coffee size={16} />{methodLabel(recipe)}</span>{recipe.time && <span><Clock3 size={16} />{recipe.time}</span>}{recipe.author && <span>By {recipe.author}</span>}</div><h3>Ingredients</h3><p className="ingredients preserve-lines">{recipe.ingredients}</p><h3>Steps</h3><p className="preserve-lines">{recipe.steps}</p>{recipe.notes && <div className="recipe-tip"><Leaf size={20} /><p className="preserve-lines">{recipe.notes}</p></div>}</div><div className="modal-footer detail-footer"><button className="icon-button danger" onClick={onDelete} title="Delete recipe" aria-label="Delete recipe"><Trash2 size={18} /></button><button className="primary" onClick={onEdit}><Pencil size={17} />Edit recipe</button></div></Modal>;
 }
 function Insights({ coffees, ratings }) {
   const ranked = coffees.map(coffee => ({ ...coffee, score: average(ratings.filter(rating => rating.coffeeId === coffee.id)), count: ratings.filter(rating => rating.coffeeId === coffee.id).length })).filter(coffee => coffee.score).sort((first, second) => second.score - first.score);
@@ -137,7 +129,7 @@ function Insights({ coffees, ratings }) {
 function RecentlyDeleted({ entries, ratings, restoring, onRestore }) {
   if (!entries.length) return <Empty title="Nothing deleted">Deleted coffees and recipes appear here, so anyone can bring them back.</Empty>;
   const deletedLabel = date => new Date(date).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  return <section><p className="deleted-intro">Deleted coffees and recipes stay here. Restoring a coffee also brings back its ratings.</p><div className="deleted-list">{entries.map(({ kind, entry }) => { const count = ratings.filter(rating => rating.coffeeId === entry.id).length; return <div className="deleted-row" key={entry.id}><div><strong>{entry.name}</strong><small>{kind === 'coffees' ? `Coffee · ${count} ${count === 1 ? 'rating' : 'ratings'}` : 'Recipe'} · Deleted {deletedLabel(entry.deletedAt)}</small></div><button className="secondary" disabled={Boolean(restoring)} onClick={() => onRestore(kind, entry.id)}><RotateCcw size={15} />{restoring === entry.id ? 'Restoring...' : 'Restore'}</button></div>; })}</div></section>;
+  return <section><p className="page-intro">Deleted coffees and recipes stay here. Restoring a coffee also brings back its ratings.</p><div className="deleted-list">{entries.map(({ kind, entry }) => { const count = ratings.filter(rating => rating.coffeeId === entry.id).length; return <div className="deleted-row" key={entry.id}><div><strong>{entry.name}</strong><small>{kind === 'recipes' ? 'Recipe' : isPlanned(entry) ? 'Want to make' : `Coffee · ${count} ${count === 1 ? 'rating' : 'ratings'}`} · Deleted {deletedLabel(entry.deletedAt)}</small></div><button className="secondary" disabled={Boolean(restoring)} onClick={() => onRestore(kind, entry.id)}><RotateCcw size={15} />{restoring === entry.id ? 'Restoring...' : 'Restore'}</button></div>; })}</div></section>;
 }
 
 function App() {
@@ -153,6 +145,7 @@ function App() {
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState(null);
   const [restoring, setRestoring] = useState('');
+  const [moving, setMoving] = useState('');
   const [exporting, setExporting] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -169,9 +162,21 @@ function App() {
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', refresh); };
   }, []);
   useEffect(() => { if (toast) { const timeout = setTimeout(() => setToast(null), toast.undo ? 8000 : 4000); return () => clearTimeout(timeout); } }, [toast]);
+  async function setMade(coffee, made) {
+    setMoving(coffee.id);
+    try {
+      // Making a coffee dates it today, so it lands at the top of the Coffees page; Undo puts back the old date.
+      await api(`coffees/${coffee.id}`, { method: 'PUT', body: JSON.stringify({ ...coffee, made, date: made ? today() : coffee.date }) });
+      await load(); setModal(null);
+      setToast({ message: made ? `${coffee.name} is now on the Coffees page.` : `${coffee.name} moved back to Want to make.`, undo: () => setMade(coffee, !made) });
+    } catch (error) { setToast({ message: `Could not move ${coffee.name}: ${error.message}`, error: true }); }
+    finally { setMoving(''); }
+  }
   async function save(kind, values, id) {
     await api(`${kind}${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', body: JSON.stringify(values) });
-    await load(); setModal(null); setToast({ message: kind === 'ratings' ? 'Rating saved.' : `${kind === 'coffees' ? 'Coffee' : 'Recipe'} saved.` });
+    // Say where a coffee went when saving moves it off the page being viewed.
+    const moved = kind === 'coffees' && (values.made ? page === 'planned' && 'Moved to the Coffees page.' : page !== 'planned' && 'Saved to Want to make.');
+    await load(); setModal(null); setToast({ message: kind === 'ratings' ? 'Rating saved.' : moved || `${kind === 'coffees' ? 'Coffee' : 'Recipe'} saved.` });
   }
   async function exportJournal() {
     setExporting(true);
@@ -189,14 +194,15 @@ function App() {
   async function remove() {
     setDeleteBusy(true); setDeleteError('');
     const { kind, entry } = modal;
-    try { await api(`${kind}/${entry.id}`, { method: 'DELETE' }); await load(); setModal(null); setToast({ message: `${entry.name} moved to Recently deleted.`, undo: { kind, id: entry.id } }); } catch (error) { setDeleteError(error.message); } finally { setDeleteBusy(false); }
+    try { await api(`${kind}/${entry.id}`, { method: 'DELETE' }); await load(); setModal(null); setToast({ message: `${entry.name} moved to Recently deleted.`, undo: () => restore(kind, entry.id) }); } catch (error) { setDeleteError(error.message); } finally { setDeleteBusy(false); }
   }
   async function restore(kind, id) {
     setRestoring(id);
     try { await api(`${kind}/${id}/restore`, { method: 'POST' }); await load(); setToast({ message: `${kind === 'coffees' ? 'Coffee' : 'Recipe'} restored.` }); } catch (error) { setToast({ message: `Restore failed: ${error.message}`, error: true }); } finally { setRestoring(''); }
   }
   function navigate(destination) { setPage(destination); setSearch(''); setMethod('All coffees'); setRoast('All roasts'); setNavOpen(false); }
-  const coffees = journal.coffees.filter(coffee => !coffee.deletedAt);
+  const coffees = journal.coffees.filter(coffee => !coffee.deletedAt && !isPlanned(coffee));
+  const plannedCoffees = journal.coffees.filter(coffee => !coffee.deletedAt && isPlanned(coffee)).sort((first, second) => (second.updatedAt || '').localeCompare(first.updatedAt || ''));
   const recipes = journal.recipes.filter(recipe => !recipe.deletedAt);
   const coffeeIds = new Set(coffees.map(coffee => coffee.id));
   const clubRatings = journal.ratings.filter(rating => coffeeIds.has(rating.coffeeId));
@@ -206,32 +212,33 @@ function App() {
   const filteredCoffees = coffees.filter(coffee => `${coffee.name} ${coffee.roaster} ${coffee.origin} ${coffee.tags}`.toLowerCase().includes(search.toLowerCase()) && (method === 'All coffees' || coffee.method === method) && (roast === 'All roasts' || coffee.roast === roast)).sort((first, second) => sort === 'Top rated' ? scoreOf(second) - scoreOf(first) : sort === 'Name A-Z' ? first.name.localeCompare(second.name) : second.date.localeCompare(first.date));
   const filteredRecipes = recipes.filter(recipe => `${recipe.name} ${recipe.author} ${recipe.method}`.toLowerCase().includes(search.toLowerCase()) && (method === 'All coffees' || recipe.method === method));
   const members = new Set(clubRatings.map(rating => rating.name.toLowerCase())).size;
-  const heading = { journal: 'Coffees', recipes: 'Recipes', insights: 'Ratings', deleted: 'Recently deleted' }[page];
-  const add = () => setModal({ type: 'form', kind: page === 'recipes' ? 'recipes' : 'coffees' });
-  const navItems = [{ key: 'journal', label: 'Coffees', icon: Coffee }, { key: 'recipes', label: 'Recipes', icon: BookOpen }, { key: 'insights', label: 'Ratings', icon: BarChart3 }];
+  const heading = { journal: 'Coffees', planned: 'Want to make', recipes: 'Recipes', insights: 'Ratings', deleted: 'Recently deleted' }[page];
+  const add = () => setModal({ type: 'form', kind: page === 'recipes' ? 'recipes' : 'coffees', made: page !== 'planned' });
+  const navItems = [{ key: 'journal', label: 'Coffees', icon: Coffee, count: coffees.length }, { key: 'planned', label: 'Want to make', icon: ListTodo, count: plannedCoffees.length }, { key: 'recipes', label: 'Recipes', icon: BookOpen }, { key: 'insights', label: 'Ratings', icon: BarChart3 }];
   const selectedCoffee = modal?.type === 'coffee' ? journal.coffees.find(coffee => coffee.id === modal.entry.id) || modal.entry : null;
 
   return <div className="app-shell">
     <aside className={`sidebar ${navOpen ? 'open' : ''}`}><a href="#" className="brand" onClick={event => { event.preventDefault(); navigate('journal'); }}><span className="brand-icon"><Coffee size={25} strokeWidth={1.6} /></span><span>Coffee Club</span></a>
-      <nav aria-label="Main navigation">{navItems.map(({ key, label, icon: Icon }) => <button key={key} className={`nav-item ${page === key ? 'active' : ''}`} onClick={() => navigate(key)} aria-current={page === key ? 'page' : undefined}><Icon size={19} strokeWidth={1.6} />{label}{key === 'journal' && <span className="nav-count">{coffees.length}</span>}</button>)}</nav>
+      <nav aria-label="Main navigation">{navItems.map(({ key, label, icon: Icon, count }) => <button key={key} className={`nav-item ${page === key ? 'active' : ''}`} onClick={() => navigate(key)} aria-current={page === key ? 'page' : undefined}><Icon size={19} strokeWidth={1.6} />{label}{count !== undefined && <span className="nav-count">{count}</span>}</button>)}</nav>
       <div className="sidebar-bottom"><button className={`deleted-link ${page === 'deleted' ? 'active' : ''}`} onClick={() => navigate('deleted')} aria-current={page === 'deleted' ? 'page' : undefined}><Trash2 size={16} />Recently deleted{deletedEntries.length > 0 && <span className="nav-count">{deletedEntries.length}</span>}</button><button className="backup-link" onClick={exportJournal} disabled={exporting}><ArrowDownToLine size={17} />{exporting ? 'Exporting...' : 'Export journal'}<ArrowUpRight size={14} /></button><div className="sidebar-foot"><span className={`status-dot ${loadError ? 'offline' : ''}`} />{loadError ? 'Connection unavailable' : loading ? 'Connecting...' : 'Connected'}</div></div>
     </aside>
     {navOpen && <button className="nav-scrim" onClick={() => setNavOpen(false)} aria-label="Close navigation" />}
     <main className="main-content"><header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setNavOpen(true)}><Menu size={22} /></button><span className="desktop-breadcrumb">Coffee Club</span><span className="mobile-brand">Coffee Club</span><span className="breadcrumb-slash">/</span><strong>{heading}</strong></div><div className="topbar-right"><span className="today">{new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span><span className="club-avatar" title="Coffee Club"><Coffee size={18} /></span></div></header>
-      <div className="page-content"><div className="page-heading"><h1>{heading}</h1>{page !== 'deleted' && <button className="primary" onClick={add}><Plus size={18} />{page === 'recipes' ? 'Add recipe' : 'Add coffee'}</button>}</div>
+      <div className="page-content"><div className="page-heading"><h1>{heading}</h1>{page !== 'deleted' && <button className="primary" onClick={add}><Plus size={18} />{page === 'recipes' ? 'Add recipe' : page === 'planned' ? 'Add idea' : 'Add coffee'}</button>}</div>
       <section className="stats-strip" aria-label="Club statistics"><div><span className="stat-icon"><Coffee size={20} strokeWidth={1.5} /></span><div><strong>{coffees.length}<span>Coffees tasted</span></strong></div></div><div><span className="stat-icon"><Star size={20} strokeWidth={1.5} /></span><div><strong>{clubRatings.length ? average(clubRatings).toFixed(1) : '—'}<span>Average rating <small>/ 10</small></span></strong></div></div><div><span className="stat-icon"><Users size={20} strokeWidth={1.5} /></span><div><strong>{members}<span>Members with ratings</span></strong></div></div><div><span className="stat-icon"><BookOpen size={20} strokeWidth={1.5} /></span><div><strong>{recipes.length}<span>Recipes</span></strong></div></div></section>
       {loadError ? <div className="connection-error" role="alert"><p>{loadError}</p><button className="secondary" onClick={load}>Try again</button></div> : loading ? <div className="loading-state"><Coffee size={28} />Loading...</div> : <>
         {(page === 'journal' || page === 'recipes') && <><div className="collection-heading"><h2>{page === 'journal' ? 'Saved coffees' : 'Saved recipes'}<span>{page === 'journal' ? filteredCoffees.length : filteredRecipes.length}</span></h2></div><div className="collection-toolbar"><div className="search-field"><Search size={17} /><input aria-label={page === 'journal' ? 'Search coffees' : 'Search recipes'} placeholder={page === 'journal' ? 'Search coffees, roasters, or origins' : 'Search recipes'} value={search} onChange={event => setSearch(event.target.value)} />{search && <button className="icon-button" aria-label="Clear search" onClick={() => setSearch('')}><X size={15} /></button>}</div><div className="toolbar-options"><label className="select-wrap"><Coffee size={15} /><select aria-label="Filter by brew method" value={method} onChange={event => setMethod(event.target.value)}><option value="All coffees">{page === 'recipes' ? 'All methods' : 'All coffees'}</option>{METHODS.map(item => <option key={item}>{item}</option>)}</select><ChevronDown size={14} /></label>{page === 'journal' && <><label className="select-wrap sort-select"><select aria-label="Sort coffees" value={sort} onChange={event => setSort(event.target.value)}>{['Newest first', 'Top rated', 'Name A-Z'].map(item => <option key={item}>{item}</option>)}</select><ChevronDown size={14} /></label><button className={`icon-button filter-button ${filters ? 'selected' : ''}`} aria-label="Roast filters" title="Filter by roast level" aria-expanded={filters} onClick={() => setFilters(!filters)}><SlidersHorizontal size={18} /></button></>}</div></div>{filters && page === 'journal' && <div className="roast-filters"><span>Roast level</span>{['All roasts', ...ROASTS].map(level => <button key={level} className={roast === level ? 'active' : ''} onClick={() => setRoast(level)} aria-pressed={roast === level}>{level}</button>)}</div>}</>}
-        {page === 'journal' && (filteredCoffees.length ? <div className="coffee-grid">{filteredCoffees.map((coffee, index) => { const score = scoreOf(coffee); const ratings = coffeeRatings(coffee); return <article className="coffee-card" key={coffee.id} style={{ '--index': index }}><button className="card-image-button" onClick={() => setModal({ type: 'coffee', entry: coffee })} aria-label={`View ${coffee.name}`}><img loading={index < 3 ? 'eager' : 'lazy'} src={journalPhoto(coffee)} alt={coffee.name} /><span className="method-tag">{methodLabel(coffee)}</span></button><div className="card-body"><span className="roaster-name">{coffee.roaster || 'ROASTER NOT RECORDED'}</span><h3><button onClick={() => setModal({ type: 'coffee', entry: coffee })}>{coffee.name}</button></h3><div className="coffee-origin"><span><Leaf size={12} />{coffee.origin || 'Origin not noted'}</span><span className="origin-dot" />{roastLabel(coffee)}</div><div className="flavor-tags">{coffee.tags.split(',').filter(tag => tag.trim()).slice(0, 3).map((tag, tagIndex) => <span key={tagIndex}>{tag.trim()}</span>)}</div><div className="card-rating"><div><Stars value={score} small /><strong>{score ? `${score.toFixed(1)} / 10` : '—'}</strong><span>{ratings.length} {ratings.length === 1 ? 'rating' : 'ratings'}</span></div></div><div className="coffee-actions"><button className="secondary" aria-label={`View details for ${coffee.name}`} onClick={() => setModal({ type: 'coffee', entry: coffee })}>View details</button><button className="primary" aria-label={`Rate ${coffee.name}`} onClick={() => setModal({ type: 'rate', entry: coffee })}><Star size={15} />Rate</button></div></div><div className="card-date"><Clock3 size={12} />{coffee.date ? 'Tasted ' : ''}{dateLabel(coffee.date)}</div></article>; })}</div> : <Empty title={coffees.length ? 'No matching coffees' : 'No coffees'} onAdd={!coffees.length ? add : undefined} label="Add coffee">{coffees.length ? 'No coffees match the search or filters.' : 'No coffees have been added.'}</Empty>)}
-        {page === 'recipes' && (filteredRecipes.length ? <div className="recipe-grid">{filteredRecipes.map(recipe => <article className="recipe-card" key={recipe.id}><button className="recipe-image" onClick={() => setModal({ type: 'recipe', entry: recipe })} aria-label={`View ${recipe.name}`}><img src={journalPhoto(recipe)} alt={`${methodLabel(recipe)} brew`} /><span className="method-tag">{methodLabel(recipe)}</span></button><div className="recipe-card-body"><span className="roaster-name">{recipe.author ? `BY ${recipe.author}` : 'AUTHOR NOT RECORDED'}</span><h3><button onClick={() => setModal({ type: 'recipe', entry: recipe })}>{recipe.name}</button></h3><p>{recipe.notes || recipe.ingredients.split('\n')[0]}</p><div className="recipe-card-footer"><span><Clock3 size={14} />{recipe.time || 'Time not recorded'}</span><button onClick={() => setModal({ type: 'recipe', entry: recipe })}>View recipe<ArrowRight size={16} /></button></div></div></article>)}</div> : <Empty title={recipes.length ? 'No matching recipes' : 'No recipes'} onAdd={!recipes.length ? add : undefined} label="Add recipe">{recipes.length ? 'No recipes match the search or filters.' : 'No recipes have been added.'}</Empty>)}
+        {page === 'journal' && (filteredCoffees.length ? <div className="coffee-grid">{filteredCoffees.map((coffee, index) => { const score = scoreOf(coffee); const ratings = coffeeRatings(coffee); return <article className="coffee-card" key={coffee.id} style={{ '--index': index }}><div className="card-body"><CoffeeCardHead coffee={coffee} onOpen={() => setModal({ type: 'coffee', entry: coffee })} /><div className="card-rating"><div><Stars value={score} small /><strong>{score ? `${score.toFixed(1)} / 10` : '—'}</strong><span>{ratings.length} {ratings.length === 1 ? 'rating' : 'ratings'}</span></div></div><div className="coffee-actions"><button className="secondary" aria-label={`View details for ${coffee.name}`} onClick={() => setModal({ type: 'coffee', entry: coffee })}>View details</button><button className="primary" aria-label={`Rate ${coffee.name}`} onClick={() => setModal({ type: 'rate', entry: coffee })}><Star size={15} />Rate</button></div></div><div className="card-date"><Clock3 size={12} />{coffee.date ? 'Tasted ' : ''}{dateLabel(coffee.date)}</div></article>; })}</div> : <Empty title={coffees.length ? 'No matching coffees' : 'No coffees'} onAdd={!coffees.length ? add : undefined} label="Add coffee">{coffees.length ? 'No coffees match the search or filters.' : 'No coffees have been added.'}</Empty>)}
+        {page === 'planned' && (plannedCoffees.length ? <><p className="page-intro">Coffees the club wants to make. Switch on <strong>Made it</strong> when someone has made one, and it moves to the Coffees page, ready to rate.</p><div className="coffee-grid">{plannedCoffees.map((coffee, index) => <article className="coffee-card planned-card" key={coffee.id} style={{ '--index': index }}><div className="card-body"><CoffeeCardHead coffee={coffee} onOpen={() => setModal({ type: 'coffee', entry: coffee })} />{coffee.notes && <p className="card-notes">{coffee.notes}</p>}<div className="coffee-actions"><button className="secondary" aria-label={`View details for ${coffee.name}`} onClick={() => setModal({ type: 'coffee', entry: coffee })}>View details</button><button className="secondary made-switch" role="switch" aria-checked={moving === coffee.id} aria-label={`Made ${coffee.name}`} disabled={Boolean(moving)} onClick={() => setMade(coffee, true)}><span className="switch-track" aria-hidden="true" />Made it</button></div></div></article>)}</div></> : <Empty title="Nothing on the list yet" onAdd={add} label="Add idea">Add coffees the club wants to make. When one is made, switch on Made it and it moves to the Coffees page.</Empty>)}
+        {page === 'recipes' && (filteredRecipes.length ? <div className="recipe-grid">{filteredRecipes.map(recipe => <article className="recipe-card" key={recipe.id}><div className="recipe-card-body">{cardTop(recipe.author ? `By ${recipe.author}` : 'Author not recorded', recipe)}<h3><button onClick={() => setModal({ type: 'recipe', entry: recipe })}>{recipe.name}</button></h3><p>{recipe.notes || recipe.ingredients.split('\n')[0]}</p><div className="recipe-card-footer"><span><Clock3 size={14} />{recipe.time || 'Time not recorded'}</span><button onClick={() => setModal({ type: 'recipe', entry: recipe })}>View recipe<ArrowRight size={16} /></button></div></div></article>)}</div> : <Empty title={recipes.length ? 'No matching recipes' : 'No recipes'} onAdd={!recipes.length ? add : undefined} label="Add recipe">{recipes.length ? 'No recipes match the search or filters.' : 'No recipes have been added.'}</Empty>)}
         {page === 'insights' && <Insights coffees={coffees} ratings={clubRatings} />}
         {page === 'deleted' && <RecentlyDeleted entries={deletedEntries} ratings={journal.ratings} restoring={restoring} onRestore={restore} />}
       </>}
     </div></main>
-    {toast && <div className={`toast ${toast.error ? 'error' : ''}`} role="status"><span>{toast.error ? <X size={16} /> : <Check size={16} />}</span>{toast.message}{toast.undo && <button className="toast-action" disabled={Boolean(restoring)} onClick={() => restore(toast.undo.kind, toast.undo.id)}>Undo</button>}<button className="icon-button" onClick={() => setToast(null)} aria-label="Dismiss notification"><X size={15} /></button></div>}
-    {modal?.type === 'form' && <EntryForm key={modal.entry?.id || modal.kind} kind={modal.kind} entry={modal.entry} onSave={save} onClose={() => setModal(null)} />}
+    {toast && <div className={`toast ${toast.error ? 'error' : ''}`} role="status"><span>{toast.error ? <X size={16} /> : <Check size={16} />}</span>{toast.message}{toast.undo && <button className="toast-action" disabled={Boolean(restoring || moving)} onClick={toast.undo}>Undo</button>}<button className="icon-button" onClick={() => setToast(null)} aria-label="Dismiss notification"><X size={15} /></button></div>}
+    {modal?.type === 'form' && <EntryForm key={modal.entry?.id || modal.kind} kind={modal.kind} entry={modal.entry} made={modal.made} onSave={save} onClose={() => setModal(null)} />}
     {modal?.type === 'rate' && <RateForm coffee={modal.entry} ratings={coffeeRatings(modal.entry)} onSave={save} onClose={() => setModal(null)} />}
-    {selectedCoffee && <CoffeeDetail coffee={selectedCoffee} ratings={coffeeRatings(selectedCoffee)} onClose={() => setModal(null)} onEdit={() => setModal({ type: 'form', kind: 'coffees', entry: selectedCoffee })} onRate={() => setModal({ type: 'rate', entry: selectedCoffee })} onDelete={() => { setDeleteError(''); setModal({ type: 'delete', kind: 'coffees', entry: selectedCoffee }); }} />}
+    {selectedCoffee && <CoffeeDetail coffee={selectedCoffee} ratings={coffeeRatings(selectedCoffee)} moving={moving === selectedCoffee.id} onClose={() => setModal(null)} onEdit={() => setModal({ type: 'form', kind: 'coffees', entry: selectedCoffee })} onRate={() => setModal({ type: 'rate', entry: selectedCoffee })} onMade={() => setMade(selectedCoffee, true)} onDelete={() => { setDeleteError(''); setModal({ type: 'delete', kind: 'coffees', entry: selectedCoffee }); }} />}
     {modal?.type === 'recipe' && <RecipeDetail recipe={modal.entry} onClose={() => setModal(null)} onEdit={() => setModal({ type: 'form', kind: 'recipes', entry: modal.entry })} onDelete={() => { setDeleteError(''); setModal({ type: 'delete', kind: 'recipes', entry: modal.entry }); }} />}
     {modal?.type === 'delete' && <Modal title={`Delete this ${modal.kind === 'coffees' ? 'coffee' : 'recipe'}?`} onClose={() => { if (!deleteBusy) setModal(null); }}><div className="detail-content"><p><strong>{modal.entry.name}</strong> will move to Recently deleted{modal.kind === 'coffees' ? ' together with its ratings' : ''}. Anyone can restore it from there.</p>{deleteError && <p className="form-error" role="alert">{deleteError}</p>}</div><div className="modal-footer"><button className="secondary" disabled={deleteBusy} onClick={() => setModal(null)}>Cancel</button><button className="primary destructive" disabled={deleteBusy} onClick={remove}><Trash2 size={16} />{deleteBusy ? 'Deleting...' : 'Delete entry'}</button></div></Modal>}
   </div>;

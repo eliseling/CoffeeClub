@@ -91,17 +91,18 @@ function cloudStub(rows) {
 }
 
 test('cloud journal maps persisted database rows into the existing UI contract', async () => {
-  const { api } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee', date: null, updated_at: 'today' }], recipes: [], ratings: [{ id: 'rating', coffee_id: 'coffee', member: 'alex', name: 'Alex', overall: 8, taste: 9, would_drink_again: 10, aroma: 5, updated_at: 'today' }] });
+  const { api } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee', date: null, made: false, updated_at: 'today' }], recipes: [], ratings: [{ id: 'rating', coffee_id: 'coffee', member: 'alex', name: 'Alex', overall: 8, taste: 9, would_drink_again: 10, aroma: 5, updated_at: 'today' }] });
   const journal = await api('journal');
   assert.equal(journal.coffees[0].date, '');
   assert.equal(journal.coffees[0].updatedAt, 'today');
+  assert.equal(journal.coffees[0].made, false);
   assert.equal(journal.ratings[0].coffeeId, 'coffee');
   assert.equal(journal.ratings[0].member, undefined);
   assert.equal(journal.ratings[0].wouldDrinkAgain, 10);
   assert.equal(journal.ratings[0].taste, 9);
 });
 test('cloud writes keep rating uniqueness and support updates and optional dates', async () => {
-  const { api, calls } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee', date: null }], recipes: [{ id: 'recipe' }], ratings: [{ id: 'rating', coffee_id: 'coffee' }] });
+  const { api, calls } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee', date: null, made: true }], recipes: [{ id: 'recipe' }], ratings: [{ id: 'rating', coffee_id: 'coffee' }] });
   await api('ratings', { method: 'POST', body: JSON.stringify({ coffeeId: 'coffee', name: ' Alex ', overall: 8, aroma: 5, taste: 10, wouldDrinkAgain: 1, id: 'ignored' }) });
   const upsert = calls.find(call => call[0] === 'upsert');
   assert.equal(upsert[2].name, 'Alex');
@@ -113,10 +114,13 @@ test('cloud writes keep rating uniqueness and support updates and optional dates
   assert.deepEqual(upsert[3], { onConflict: 'coffee_id,member' });
   await api('coffees/coffee', { method: 'PUT', body: JSON.stringify({ name: 'Korean coffee', method: 'Not recorded', roast: 'Not recorded', date: '' }) });
   assert.equal(calls.find(call => call[0] === 'update')[2].date, null);
+  assert.equal(calls.find(call => call[0] === 'update')[2].made, true);
+  await api('coffees', { method: 'POST', body: JSON.stringify({ name: 'Dalgona coffee', method: 'Not recorded', roast: 'Not recorded', made: false }) });
+  assert.equal(calls.find(call => call[0] === 'insert')[2].made, false);
   await assert.rejects(api('other', { method: 'POST', body: '{}' }), /Invalid journal request/);
 });
 test('cloud deletion only marks entries as deleted and restore clears the mark', async () => {
-  const { api, calls } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee', deleted_at: '2026-11-02T08:00:00Z' }], recipes: [{ id: 'recipe' }], ratings: [] });
+  const { api, calls } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee', made: true, deleted_at: '2026-11-02T08:00:00Z' }], recipes: [{ id: 'recipe' }], ratings: [] });
   assert.equal((await api('journal')).coffees[0].deletedAt, '2026-11-02T08:00:00Z');
   assert.deepEqual(await api('recipes/recipe', { method: 'DELETE' }), { success: true });
   assert.equal(calls.some(call => call[0] === 'delete'), false);
@@ -146,6 +150,26 @@ test('Recently deleted migration stops shared visitors from erasing entries but 
     await db.query("UPDATE public.coffees SET deleted_at = null WHERE id = 'club-korean-coffee'");
     assert.equal((await db.query('SELECT * FROM public.coffees WHERE deleted_at IS NULL')).rows.length, 3);
   } finally { await db.close(); }
+});
+test('Want to make migration keeps existing coffees made and lets shared visitors plan and make coffees', async () => {
+  const db = new PGlite();
+  const migrations = ['001_shared_journal.sql', '002_ten_point_ratings.sql', '003_recently_deleted.sql', '004_want_to_make.sql'].map(name => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
+  try {
+    await db.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
+    for (const migration of migrations) await db.exec(migration);
+    await db.exec(migrations[3]);
+    await db.exec('SET ROLE anon;');
+    assert.deepEqual((await db.query('SELECT DISTINCT made FROM public.coffees')).rows, [{ made: true }]);
+    await db.query("INSERT INTO public.coffees (id, name, made) VALUES ('dalgona', 'Dalgona coffee', false)");
+    assert.equal((await db.query("SELECT made FROM public.coffees WHERE id = 'dalgona'")).rows[0].made, false);
+    await db.query("UPDATE public.coffees SET made = true, date = '2026-11-02' WHERE id = 'dalgona'");
+    assert.equal((await db.query("SELECT made FROM public.coffees WHERE id = 'dalgona'")).rows[0].made, true);
+    await assert.rejects(db.query("UPDATE public.coffees SET made = null WHERE id = 'dalgona'"));
+  } finally { await db.close(); }
+});
+test('cloud journal asks for the Want to make update when the database is missing it', async () => {
+  const { api } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee' }], recipes: [], ratings: [] });
+  await assert.rejects(api('journal'), /004_want_to_make\.sql/);
 });
 test('localhost still uses its server and misconfigured static hosting reports a useful error', async () => {
   let requested;
