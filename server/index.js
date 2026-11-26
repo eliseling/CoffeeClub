@@ -5,6 +5,8 @@ import { createStore } from './store.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const store = createStore(process.env.COFFEE_DB || resolve(root, 'data/coffee-club.sqlite'), { seed: true });
+store.eraseExpired();
+setInterval(() => store.eraseExpired(), 60 * 60 * 1000).unref();
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 app.get('/api/journal', (request, response) => response.json(store.all()));

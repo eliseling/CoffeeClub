@@ -167,6 +167,33 @@ test('Want to make migration keeps existing coffees made and lets shared visitor
     await assert.rejects(db.query("UPDATE public.coffees SET made = null WHERE id = 'dalgona'"));
   } finally { await db.close(); }
 });
+test('erase migration removes entries deleted over 30 days ago with their ratings, and visitors cannot run it', async () => {
+  const db = new PGlite();
+  const names = ['001_shared_journal.sql', '002_ten_point_ratings.sql', '003_recently_deleted.sql', '004_want_to_make.sql', '005_erase_after_30_days.sql'];
+  const migrations = names.map(name => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
+  // Embedded Postgres has no pg_cron, so run the erase part of 005 and leave out the hourly schedule.
+  const erase = `${migrations[4].split('create extension if not exists pg_cron')[0]}commit;`;
+  assert.match(migrations[4], /cron\.schedule\('coffee-club-erase-expired', '0 \* \* \* \*'/);
+  try {
+    await db.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
+    for (const migration of migrations.slice(0, 4)) await db.exec(migration);
+    await db.query("INSERT INTO public.ratings (coffee_id, name) VALUES ('club-korean-coffee', 'Alex'), ('club-brazilian-coffee', 'Alex')");
+    await db.query("UPDATE public.coffees SET deleted_at = now() - interval '31 days' WHERE id = 'club-korean-coffee'");
+    await db.query("UPDATE public.coffees SET deleted_at = now() - interval '29 days' WHERE id = 'club-brazilian-coffee'");
+    await db.query("INSERT INTO public.recipes (name, ingredients, steps, deleted_at) VALUES ('Old recipe', 'Coffee', 'Brew', now() - interval '40 days'), ('Kept recipe', 'Coffee', 'Brew', null)");
+    await db.exec(erase);
+    assert.deepEqual((await db.query('SELECT id FROM public.coffees ORDER BY id')).rows.map(row => row.id), ['club-brazilian-coffee', 'club-iced-biscoff-coffee']);
+    assert.deepEqual((await db.query('SELECT coffee_id FROM public.ratings')).rows, [{ coffee_id: 'club-brazilian-coffee' }]);
+    assert.deepEqual((await db.query('SELECT name FROM public.recipes')).rows, [{ name: 'Kept recipe' }]);
+    await db.query("UPDATE public.coffees SET deleted_at = now() - interval '30 days 1 minute' WHERE id = 'club-brazilian-coffee'");
+    await db.exec('SET ROLE anon;');
+    await assert.rejects(db.query('SELECT public.coffee_club_erase_expired()'), /permission denied/);
+    await db.exec('RESET ROLE;');
+    await db.query('SELECT public.coffee_club_erase_expired()');
+    assert.deepEqual((await db.query('SELECT id FROM public.coffees')).rows, [{ id: 'club-iced-biscoff-coffee' }]);
+    assert.equal((await db.query('SELECT * FROM public.ratings')).rows.length, 0);
+  } finally { await db.close(); }
+});
 test('cloud journal asks for the Want to make update when the database is missing it', async () => {
   const { api } = cloudStub({ coffees: [{ id: 'coffee', name: 'Korean coffee' }], recipes: [], ratings: [] });
   await assert.rejects(api('journal'), /004_want_to_make\.sql/);

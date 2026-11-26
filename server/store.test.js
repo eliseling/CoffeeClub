@@ -121,6 +121,25 @@ test('coffees can wait in Want to make and older coffees count as made', () => {
     assert.equal(store.all().coffees.find(entry => entry.id === planned.id).made, true);
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });
+test('entries in Recently deleted are erased for good after 30 days, together with their ratings', () => {
+  const store = createStore(':memory:');
+  try {
+    const day = 24 * 60 * 60 * 1000;
+    const expired = store.save('coffees', coffee);
+    const recent = store.save('coffees', { ...coffee, name: 'Recent beans' });
+    const kept = store.save('coffees', { ...coffee, name: 'Kept beans' });
+    const recipe = store.save('recipes', { name: 'Morning cup', method: 'Pour over', ingredients: '18g coffee', steps: 'Brew.' });
+    store.save('ratings', { coffeeId: expired.id, name: 'Alex', overall: 8, aroma: 7, taste: 8, wouldDrinkAgain: 9 });
+    store.save('ratings', { coffeeId: recent.id, name: 'Alex', overall: 6, aroma: 6, taste: 6, wouldDrinkAgain: 6 });
+    for (const [kind, id] of [['coffees', expired.id], ['coffees', recent.id], ['recipes', recipe.id]]) store.remove(kind, id);
+    const deletedAt = Date.parse(store.all().coffees.find(entry => entry.id === expired.id).deletedAt);
+    assert.equal(store.eraseExpired(deletedAt + 29 * day), 0);
+    assert.equal(store.eraseExpired(deletedAt + 31 * day), 3);
+    assert.deepEqual(store.all().coffees.map(entry => entry.id), [kept.id]);
+    assert.deepEqual(store.all().recipes, []);
+    assert.deepEqual(store.all().ratings, []);
+  } finally { store.close(); }
+});
 test('rejects malformed entries without modifying the journal', () => {
   const store = createStore(':memory:');
   try {

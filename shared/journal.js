@@ -1,5 +1,7 @@
 export const methods = ['Not recorded', 'Pour over', 'Espresso', 'French press', 'AeroPress', 'Cold brew', 'Moka pot'];
 export const roasts = ['Not recorded', 'Light', 'Medium', 'Dark'];
+// Deleted coffees and recipes are erased for good this many days after they were deleted.
+export const deletedRetentionDays = 30;
 export const ratingDimensions = [
   { key: 'taste', label: 'Taste' },
   { key: 'wouldDrinkAgain', label: 'Would drink again' },
