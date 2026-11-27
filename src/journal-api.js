@@ -15,6 +15,7 @@ function entryFromRow(kind, row) {
   if (deleted_at) entry.deletedAt = deleted_at;
   if (kind === 'ratings') {
     if ('flavor' in row || 'body' in row) throw new Error('Update your Supabase database by running 002_ten_point_ratings.sql before using ten-point ratings.');
+    if (!('deleted_at' in row)) throw new Error('Update your Supabase database by running 006_delete_ratings.sql before deleting ratings.');
     entry.coffeeId = coffee_id;
     entry.wouldDrinkAgain = would_drink_again;
   }
@@ -60,7 +61,6 @@ export function createJournalApi({ url, key, allowLocal = true, clientFactory = 
     if (!fields[kind] || (extra && extra !== 'restore')) throw new Error('Invalid journal request.');
     const deleting = method === 'DELETE' && id && !extra;
     if (deleting || (method === 'POST' && extra === 'restore')) {
-      if (kind === 'ratings') throw new Error('Invalid journal request.');
       const query = client.from(kind).update({ deleted_at: deleting ? new Date().toISOString() : null }).eq('id', id);
       const { data, error } = await (deleting ? query.is('deleted_at', null) : query.not('deleted_at', 'is', null)).select('id');
       if (error) throw new Error(`Unable to ${deleting ? 'delete' : 'restore'} this entry: ${error.message}`);
@@ -75,6 +75,8 @@ export function createJournalApi({ url, key, allowLocal = true, clientFactory = 
       row.made = value.made !== false;
     }
     if (kind === 'ratings') {
+      // Rating again under a deleted rating's name replaces it and brings it back.
+      row.deleted_at = null;
       row.coffee_id = value.coffeeId;
       row.would_drink_again = row.wouldDrinkAgain;
       delete row.wouldDrinkAgain;

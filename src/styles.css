@@ -211,6 +211,8 @@ input::placeholder, textarea::placeholder { color: #b0a394; }
 .member-rating p { margin-top: 7px; font-size: 11px; }
 .member-score { color: #a47f44; font-size: 11px; display: flex; align-items: center; gap: 5px; }
 .member-score svg { fill: #be9354; }
+.delete-rating { width: 28px; height: 28px; margin: -5px -6px 0 -4px; color: #b9a78e; }
+.delete-rating:hover { color: #b76b51; background: #f6ece7; }
 .detail-footer { padding: 17px 24px; margin: 0; }
 .detail-footer .danger { margin-right: auto; }
 .danger { color: #b76b51; }
