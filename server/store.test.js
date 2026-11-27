@@ -98,7 +98,7 @@ test('deleting moves coffees and recipes to Recently deleted and restoring bring
     assert.equal(store.all().coffees[0].deletedAt, undefined);
     assert.equal(store.all().ratings[0].name, 'Alex');
     assert.equal(store.remove('coffees', 'missing'), false);
-    assert.throws(() => store.remove('ratings', store.all().ratings[0].id), /Invalid entry type/);
+    assert.throws(() => store.remove('arbitrary', entry.id), /Invalid entry type/);
   } finally { store.close(); }
 });
 test('coffees can wait in Want to make and older coffees count as made', () => {
@@ -121,6 +121,24 @@ test('coffees can wait in Want to make and older coffees count as made', () => {
     assert.equal(store.all().coffees.find(entry => entry.id === planned.id).made, true);
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });
+test('ratings can be deleted, restored, and replaced by rating again under the same name', () => {
+  const store = createStore(':memory:');
+  try {
+    const entry = store.save('coffees', coffee);
+    const rating = store.save('ratings', { coffeeId: entry.id, name: 'han Andrias', overall: 9, aroma: 7, taste: 8, wouldDrinkAgain: 9 });
+    assert.equal(store.remove('ratings', rating.id), true);
+    assert.equal(store.remove('ratings', rating.id), false);
+    assert.ok(store.all().ratings[0].deletedAt);
+    assert.equal(store.restore('ratings', rating.id), true);
+    assert.equal(store.all().ratings[0].deletedAt, undefined);
+    store.remove('ratings', rating.id);
+    const again = store.save('ratings', { coffeeId: entry.id, name: 'Han Andrias', overall: 4, aroma: 4, taste: 4, wouldDrinkAgain: 4 });
+    assert.equal(again.id, rating.id);
+    assert.equal(store.all().ratings.length, 1);
+    assert.equal(store.all().ratings[0].deletedAt, undefined);
+    assert.equal(store.all().ratings[0].overall, 4);
+  } finally { store.close(); }
+});
 test('entries in Recently deleted are erased for good after 30 days, together with their ratings', () => {
   const store = createStore(':memory:');
   try {
@@ -131,10 +149,11 @@ test('entries in Recently deleted are erased for good after 30 days, together wi
     const recipe = store.save('recipes', { name: 'Morning cup', method: 'Pour over', ingredients: '18g coffee', steps: 'Brew.' });
     store.save('ratings', { coffeeId: expired.id, name: 'Alex', overall: 8, aroma: 7, taste: 8, wouldDrinkAgain: 9 });
     store.save('ratings', { coffeeId: recent.id, name: 'Alex', overall: 6, aroma: 6, taste: 6, wouldDrinkAgain: 6 });
-    for (const [kind, id] of [['coffees', expired.id], ['coffees', recent.id], ['recipes', recipe.id]]) store.remove(kind, id);
+    const deletedRating = store.save('ratings', { coffeeId: kept.id, name: 'Sam', overall: 6, aroma: 6, taste: 6, wouldDrinkAgain: 6 });
+    for (const [kind, id] of [['coffees', expired.id], ['coffees', recent.id], ['recipes', recipe.id], ['ratings', deletedRating.id]]) store.remove(kind, id);
     const deletedAt = Date.parse(store.all().coffees.find(entry => entry.id === expired.id).deletedAt);
     assert.equal(store.eraseExpired(deletedAt + 29 * day), 0);
-    assert.equal(store.eraseExpired(deletedAt + 31 * day), 3);
+    assert.equal(store.eraseExpired(deletedAt + 31 * day), 4);
     assert.deepEqual(store.all().coffees.map(entry => entry.id), [kept.id]);
     assert.deepEqual(store.all().recipes, []);
     assert.deepEqual(store.all().ratings, []);

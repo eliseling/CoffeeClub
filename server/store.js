@@ -89,6 +89,7 @@ export function createStore(filename, { seed = false } = {}) {
     const entry = { ...value, id: existing?.id ?? id ?? randomUUID(), updatedAt: new Date().toISOString() };
     if (kind === 'ratings') {
       if (!db.prepare('SELECT id FROM coffees WHERE id = ?').get(value.coffeeId)) throw new Error('Coffee not found.');
+      // Rating again under a deleted rating's name replaces it and brings it back.
       db.prepare('INSERT INTO ratings (id, coffeeId, member, payload) VALUES (?, ?, ?, ?) ON CONFLICT(coffeeId, member) DO UPDATE SET payload = excluded.payload').run(entry.id, value.coffeeId, value.name.toLowerCase(), JSON.stringify(entry));
     } else {
       db.prepare(`INSERT INTO ${kind} (id, payload) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload`).run(entry.id, JSON.stringify(entry));
@@ -96,7 +97,7 @@ export function createStore(filename, { seed = false } = {}) {
     return entry;
   }
   function setDeleted(kind, id, deleted) {
-    if (!['coffees', 'recipes'].includes(kind)) throw new Error('Invalid entry type.');
+    if (!['coffees', 'recipes', 'ratings'].includes(kind)) throw new Error('Invalid entry type.');
     const row = db.prepare(`SELECT payload FROM ${kind} WHERE id = ?`).get(id);
     if (!row) return false;
     const { deletedAt, ...entry } = JSON.parse(row.payload);
@@ -109,7 +110,7 @@ export function createStore(filename, { seed = false } = {}) {
   // Erases entries that have been in Recently deleted for longer than the retention period; a coffee's ratings go with it.
   function eraseExpired(now = Date.now()) {
     const cutoff = new Date(now - deletedRetentionDays * 24 * 60 * 60 * 1000).toISOString();
-    return ['coffees', 'recipes'].reduce((erased, kind) => erased + Number(db.prepare(`DELETE FROM ${kind} WHERE json_extract(payload, '$.deletedAt') < ?`).run(cutoff).changes), 0);
+    return ['coffees', 'recipes', 'ratings'].reduce((erased, kind) => erased + Number(db.prepare(`DELETE FROM ${kind} WHERE json_extract(payload, '$.deletedAt') < ?`).run(cutoff).changes), 0);
   }
   return { all, save, remove, restore, eraseExpired, close: () => db.close() };
 }
