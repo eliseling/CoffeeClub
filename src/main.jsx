@@ -1,12 +1,20 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowDownToLine, ArrowRight, ArrowUpRight, BarChart3, BookOpen, Check, ChevronDown, Clock3, Coffee, Flame, Leaf, ListTodo, Menu, Minus, Pencil, Plus, RotateCcw, Search, SlidersHorizontal, Star, Trash2, Users, X } from 'lucide-react';
-import { methods as METHODS, roasts as ROASTS, ratingDimensions, neutralRatings } from '../shared/journal.js';
+import { ArrowDownToLine, ArrowRight, ArrowUpRight, BarChart3, BookOpen, Check, ChevronDown, Clock3, Coffee, Flame, Hourglass, Leaf, ListTodo, Menu, Minus, Pencil, Plus, RotateCcw, Search, SlidersHorizontal, Star, Trash2, Users, X } from 'lucide-react';
+import { methods as METHODS, roasts as ROASTS, ratingDimensions, neutralRatings, deletedRetentionDays } from '../shared/journal.js';
 import { createJournalApi } from './journal-api.js';
 import './styles.css';
 
 const today = () => new Date().toLocaleDateString('en-CA');
 const isPlanned = coffee => coffee.made === false;
+const HOUR = 60 * 60 * 1000;
+const erasedAt = entry => Date.parse(entry.deletedAt) + deletedRetentionDays * 24 * HOUR;
+function timeLeft(milliseconds) {
+  const hours = milliseconds / HOUR;
+  if (hours >= 36) return `${Math.round(hours / 24)} days left`;
+  if (hours >= 1) return `${Math.round(hours)} ${Math.round(hours) === 1 ? 'hour' : 'hours'} left`;
+  return 'Less than an hour left';
+}
 const roastLabel = coffee => coffee.roast === 'Not recorded' ? 'Roast not recorded' : `${coffee.roast} roast`;
 const methodLabel = entry => entry.method === 'Not recorded' ? 'Method not recorded' : entry.method;
 const cardTop = (label, entry) => <div className="card-top"><span className="roaster-name">{label}</span>{entry.method !== 'Not recorded' && <span className="method-pill">{entry.method}</span>}</div>;
@@ -127,9 +135,9 @@ function Insights({ coffees, ratings }) {
   return <div className="insights-layout"><section className="ranking-section"><div className="section-heading"><h2>Coffee ranking</h2><Star size={22} /></div><div className="ranking-chart" role="img" aria-label={`Coffee ranking: ${ranked.map(coffee => `${coffee.name}, ${coffee.score.toFixed(1)} out of 10`).join('; ')}`}>{ranked.map((coffee, index) => <div className="ranking-row" key={coffee.id}><span className="rank-number">{String(index + 1).padStart(2, '0')}</span><div><div className="ranking-label"><strong>{coffee.name}</strong><span>{coffee.score.toFixed(1)} / 10 <Star size={12} /></span></div><div className="bar-track"><div className={`bar-fill bar-${index % 3}`} style={{ width: `${coffee.score / 10 * 100}%` }} /></div><small>{coffee.method === 'Not recorded' ? '' : `${coffee.method} · `}{coffee.count} {coffee.count === 1 ? 'rating' : 'ratings'}</small></div></div>)}</div></section><section className="profile-section"><h2>Average scores</h2><p className="muted">All ratings</p>{ratingDimensions.map(({ key, label }) => { const score = average(ratings, key); return <div className="dimension-row" key={key}><div><span>{label}</span><strong>{score.toFixed(1)}<small> / 10</small></strong></div><div className="bar-track"><div className="bar-fill sage" style={{ width: `${score / 10 * 100}%` }} /></div></div>; })}<div className="profile-note"><Coffee size={25} strokeWidth={1.5} /><p>{ranked[0].name}<small>Highest-rated coffee</small></p></div></section></div>;
 }
 function RecentlyDeleted({ entries, ratings, restoring, onRestore }) {
-  if (!entries.length) return <Empty title="Nothing deleted">Deleted coffees and recipes appear here, so anyone can bring them back.</Empty>;
-  const deletedLabel = date => new Date(date).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  return <section><p className="page-intro">Deleted coffees and recipes stay here. Restoring a coffee also brings back its ratings.</p><div className="deleted-list">{entries.map(({ kind, entry }) => { const count = ratings.filter(rating => rating.coffeeId === entry.id).length; return <div className="deleted-row" key={entry.id}><div><strong>{entry.name}</strong><small>{kind === 'recipes' ? 'Recipe' : isPlanned(entry) ? 'Want to make' : `Coffee · ${count} ${count === 1 ? 'rating' : 'ratings'}`} · Deleted {deletedLabel(entry.deletedAt)}</small></div><button className="secondary" disabled={Boolean(restoring)} onClick={() => onRestore(kind, entry.id)}><RotateCcw size={15} />{restoring === entry.id ? 'Restoring...' : 'Restore'}</button></div>; })}</div></section>;
+  if (!entries.length) return <Empty title="Nothing deleted">Deleted coffees and recipes stay here for {deletedRetentionDays} days, so anyone can bring them back.</Empty>;
+  const dateTime = date => new Date(date).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return <section><p className="page-intro">Deleted coffees and recipes stay here for {deletedRetentionDays} days, then they are erased for good. Restoring a coffee also brings back its ratings.</p><div className="deleted-list">{entries.map(({ kind, entry }) => { const count = ratings.filter(rating => rating.coffeeId === entry.id).length; return <div className="deleted-row" key={entry.id}><div><strong>{entry.name}</strong><small>{kind === 'recipes' ? 'Recipe' : isPlanned(entry) ? 'Want to make' : `Coffee · ${count} ${count === 1 ? 'rating' : 'ratings'}`} · Deleted {dateTime(entry.deletedAt)}</small></div><span className={`erase-timer ${erasedAt(entry) - Date.now() < 3 * 24 * HOUR ? 'soon' : ''}`} title={`Erased for good around ${dateTime(erasedAt(entry))}`}><Hourglass size={13} />{timeLeft(erasedAt(entry) - Date.now())}</span><button className="secondary" disabled={Boolean(restoring)} onClick={() => onRestore(kind, entry.id)}><RotateCcw size={15} />{restoring === entry.id ? 'Restoring...' : 'Restore'}</button></div>; })}</div></section>;
 }
 
 function App() {
@@ -206,7 +214,7 @@ function App() {
   const recipes = journal.recipes.filter(recipe => !recipe.deletedAt);
   const coffeeIds = new Set(coffees.map(coffee => coffee.id));
   const clubRatings = journal.ratings.filter(rating => coffeeIds.has(rating.coffeeId));
-  const deletedEntries = [...journal.coffees.map(entry => ({ kind: 'coffees', entry })), ...journal.recipes.map(entry => ({ kind: 'recipes', entry }))].filter(({ entry }) => entry.deletedAt).sort((first, second) => second.entry.deletedAt.localeCompare(first.entry.deletedAt));
+  const deletedEntries = [...journal.coffees.map(entry => ({ kind: 'coffees', entry })), ...journal.recipes.map(entry => ({ kind: 'recipes', entry }))].filter(({ entry }) => entry.deletedAt && erasedAt(entry) > Date.now()).sort((first, second) => second.entry.deletedAt.localeCompare(first.entry.deletedAt));
   const coffeeRatings = coffee => journal.ratings.filter(rating => rating.coffeeId === coffee.id);
   const scoreOf = coffee => average(coffeeRatings(coffee));
   const filteredCoffees = coffees.filter(coffee => `${coffee.name} ${coffee.roaster} ${coffee.origin} ${coffee.tags}`.toLowerCase().includes(search.toLowerCase()) && (method === 'All coffees' || coffee.method === method) && (roast === 'All roasts' || coffee.roast === roast)).sort((first, second) => sort === 'Top rated' ? scoreOf(second) - scoreOf(first) : sort === 'Name A-Z' ? first.name.localeCompare(second.name) : second.date.localeCompare(first.date));
@@ -240,7 +248,7 @@ function App() {
     {modal?.type === 'rate' && <RateForm coffee={modal.entry} ratings={coffeeRatings(modal.entry)} onSave={save} onClose={() => setModal(null)} />}
     {selectedCoffee && <CoffeeDetail coffee={selectedCoffee} ratings={coffeeRatings(selectedCoffee)} moving={moving === selectedCoffee.id} onClose={() => setModal(null)} onEdit={() => setModal({ type: 'form', kind: 'coffees', entry: selectedCoffee })} onRate={() => setModal({ type: 'rate', entry: selectedCoffee })} onMade={() => setMade(selectedCoffee, true)} onDelete={() => { setDeleteError(''); setModal({ type: 'delete', kind: 'coffees', entry: selectedCoffee }); }} />}
     {modal?.type === 'recipe' && <RecipeDetail recipe={modal.entry} onClose={() => setModal(null)} onEdit={() => setModal({ type: 'form', kind: 'recipes', entry: modal.entry })} onDelete={() => { setDeleteError(''); setModal({ type: 'delete', kind: 'recipes', entry: modal.entry }); }} />}
-    {modal?.type === 'delete' && <Modal title={`Delete this ${modal.kind === 'coffees' ? 'coffee' : 'recipe'}?`} onClose={() => { if (!deleteBusy) setModal(null); }}><div className="detail-content"><p><strong>{modal.entry.name}</strong> will move to Recently deleted{modal.kind === 'coffees' ? ' together with its ratings' : ''}. Anyone can restore it from there.</p>{deleteError && <p className="form-error" role="alert">{deleteError}</p>}</div><div className="modal-footer"><button className="secondary" disabled={deleteBusy} onClick={() => setModal(null)}>Cancel</button><button className="primary destructive" disabled={deleteBusy} onClick={remove}><Trash2 size={16} />{deleteBusy ? 'Deleting...' : 'Delete entry'}</button></div></Modal>}
+    {modal?.type === 'delete' && <Modal title={`Delete this ${modal.kind === 'coffees' ? 'coffee' : 'recipe'}?`} onClose={() => { if (!deleteBusy) setModal(null); }}><div className="detail-content"><p><strong>{modal.entry.name}</strong> will move to Recently deleted{modal.kind === 'coffees' ? ' together with its ratings' : ''}. Anyone can restore it from there for {deletedRetentionDays} days; after that it is erased for good.</p>{deleteError && <p className="form-error" role="alert">{deleteError}</p>}</div><div className="modal-footer"><button className="secondary" disabled={deleteBusy} onClick={() => setModal(null)}>Cancel</button><button className="primary destructive" disabled={deleteBusy} onClick={remove}><Trash2 size={16} />{deleteBusy ? 'Deleting...' : 'Delete entry'}</button></div></Modal>}
   </div>;
 }
 

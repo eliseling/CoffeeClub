@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { methods, roasts, starterCoffees } from '../shared/journal.js';
+import { methods, roasts, starterCoffees, deletedRetentionDays } from '../shared/journal.js';
 
 export { methods, roasts } from '../shared/journal.js';
 
@@ -106,5 +106,10 @@ export function createStore(filename, { seed = false } = {}) {
   }
   const remove = (kind, id) => setDeleted(kind, id, true);
   const restore = (kind, id) => setDeleted(kind, id, false);
-  return { all, save, remove, restore, close: () => db.close() };
+  // Erases entries that have been in Recently deleted for longer than the retention period; a coffee's ratings go with it.
+  function eraseExpired(now = Date.now()) {
+    const cutoff = new Date(now - deletedRetentionDays * 24 * 60 * 60 * 1000).toISOString();
+    return ['coffees', 'recipes'].reduce((erased, kind) => erased + Number(db.prepare(`DELETE FROM ${kind} WHERE json_extract(payload, '$.deletedAt') < ?`).run(cutoff).changes), 0);
+  }
+  return { all, save, remove, restore, eraseExpired, close: () => db.close() };
 }
